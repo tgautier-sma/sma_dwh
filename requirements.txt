@@ -1,0 +1,17 @@
+# Dépendances FastAPI et serveur
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# Base de données
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.14.0
+
+# Utilitaires
+python-dotenv==1.0.1
+python-multipart==0.0.12
+
+# Date et temps
+python-dateutil==2.9.0

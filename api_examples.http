@@ -1,0 +1,301 @@
+# Collection de requêtes API pour tester le serveur
+# Peut être utilisé avec des clients REST comme Postman, Insomnia, ou HTTPie
+
+### Variables
+@baseUrl = http://localhost:8000
+
+### ============================================================================
+### ROOT & HEALTH
+### ============================================================================
+
+### Test Root
+GET {{baseUrl}}/
+
+### Health Check
+GET {{baseUrl}}/health
+
+
+### ============================================================================
+### CLIENTS
+### ============================================================================
+
+### Créer un client entreprise
+POST {{baseUrl}}/clients/
+Content-Type: application/json
+
+{
+  "client_number": "CLI-2024-001",
+  "client_type": "entreprise",
+  "company_name": "Entreprise Construction SA",
+  "legal_form": "SAS",
+  "siret": "12345678901234",
+  "siren": "123456789",
+  "email": "contact@entreprise-construction.fr",
+  "phone": "0123456789",
+  "address_line1": "10 rue de la Construction",
+  "postal_code": "75001",
+  "city": "Paris",
+  "country": "France",
+  "is_active": true
+}
+
+### Créer un client particulier
+POST {{baseUrl}}/clients/
+Content-Type: application/json
+
+{
+  "client_number": "CLI-2024-002",
+  "client_type": "particulier",
+  "civility": "M.",
+  "first_name": "Jean",
+  "last_name": "Dupont",
+  "birth_date": "1980-05-15",
+  "email": "jean.dupont@email.fr",
+  "phone": "0612345678",
+  "address_line1": "25 avenue des Champs",
+  "postal_code": "69000",
+  "city": "Lyon",
+  "is_active": true
+}
+
+### Liste des clients
+GET {{baseUrl}}/clients/
+
+### Rechercher des clients
+GET {{baseUrl}}/clients/?search=Construction
+
+### Filtrer les clients par type
+GET {{baseUrl}}/clients/?client_type=entreprise
+
+### Récupérer un client par numéro
+GET {{baseUrl}}/clients/number/CLI-2024-001
+
+
+### ============================================================================
+### ADRESSES CLIENTS
+### ============================================================================
+
+### Ajouter un siège social (remplacer {client_id} par un ID réel)
+POST {{baseUrl}}/clients/{client_id}/addresses
+Content-Type: application/json
+
+{
+  "address_type": "siege_social",
+  "name": "Siège Social Principal",
+  "address_line1": "10 rue de la Construction",
+  "postal_code": "75001",
+  "city": "Paris",
+  "country": "France",
+  "is_primary": true,
+  "is_active": true
+}
+
+### Ajouter un entrepôt
+POST {{baseUrl}}/clients/{client_id}/addresses
+Content-Type: application/json
+
+{
+  "address_type": "entrepot",
+  "name": "Entrepôt Nord",
+  "reference": "ENT-001",
+  "address_line1": "Zone Industrielle du Nord",
+  "postal_code": "59000",
+  "city": "Lille",
+  "warehouse_surface_m2": 1500.0,
+  "warehouse_capacity": "500 palettes",
+  "stored_materials": "Matériaux de construction, outillage",
+  "contact_name": "Pierre Martin",
+  "contact_phone": "0320123456",
+  "is_active": true
+}
+
+### Liste des adresses d'un client
+GET {{baseUrl}}/clients/{client_id}/addresses
+
+### Filtrer par type d'adresse
+GET {{baseUrl}}/clients/{client_id}/addresses?address_type=entrepot
+
+
+### ============================================================================
+### CHANTIERS
+### ============================================================================
+
+### Créer un chantier
+POST {{baseUrl}}/sites/
+Content-Type: application/json
+
+{
+  "site_reference": "CHANT-2024-001",
+  "site_name": "Résidence Les Jardins",
+  "address_line1": "12 avenue des Fleurs",
+  "postal_code": "69100",
+  "city": "Villeurbanne",
+  "department": "69",
+  "region": "Auvergne-Rhône-Alpes",
+  "building_category_code": "HAB-COL",
+  "work_category_code": "CONST-NEUF",
+  "total_surface_m2": 3500.0,
+  "habitable_surface_m2": 2800.0,
+  "num_floors": 4,
+  "num_units": 28,
+  "construction_cost": 5000000.0,
+  "land_value": 1000000.0,
+  "total_project_value": 6000000.0,
+  "permit_date": "2024-01-15",
+  "opening_date": "2024-03-01",
+  "planned_completion_date": "2025-12-31",
+  "has_basement": true,
+  "has_elevator": true,
+  "seismic_zone": 2,
+  "soil_study_done": true,
+  "is_active": true
+}
+
+### Liste des chantiers
+GET {{baseUrl}}/sites/
+
+### Rechercher des chantiers
+GET {{baseUrl}}/sites/?search=Jardins
+
+### Filtrer par ville
+GET {{baseUrl}}/sites/?city=Villeurbanne
+
+
+### ============================================================================
+### CONTRATS
+### ============================================================================
+
+### Créer un contrat DO (remplacer {client_id} et {site_id} par des IDs réels)
+POST {{baseUrl}}/contracts/
+Content-Type: application/json
+
+{
+  "contract_number": "CONT-DO-2024-001",
+  "contract_type_code": "DO",
+  "client_id": "{client_id}",
+  "construction_site_id": "{site_id}",
+  "status": "brouillon",
+  "issue_date": "2024-01-15",
+  "effective_date": "2024-03-01",
+  "expiry_date": "2034-03-01",
+  "insured_amount": 6000000.0,
+  "annual_premium": 15000.0,
+  "franchise_amount": 1500.0,
+  "duration_years": 10,
+  "is_renewable": false,
+  "selected_guarantees": [
+    {
+      "code": "DO-DEC",
+      "ceiling": 6000000,
+      "franchise": 1500,
+      "included": true
+    },
+    {
+      "code": "DO-EXIST",
+      "ceiling": 500000,
+      "franchise": 3000,
+      "included": true
+    }
+  ],
+  "broker_name": "Courtage Assurance Pro",
+  "underwriter": "Marie Leblanc"
+}
+
+### Liste des contrats
+GET {{baseUrl}}/contracts/
+
+### Filtrer les contrats actifs
+GET {{baseUrl}}/contracts/?status=actif
+
+### Filtrer par type de contrat
+GET {{baseUrl}}/contracts/?contract_type_code=DO
+
+### Filtrer par client
+GET {{baseUrl}}/contracts/?client_id={client_id}
+
+### Statistiques des contrats
+GET {{baseUrl}}/contracts/statistics/summary
+
+
+### ============================================================================
+### RÉFÉRENTIELS - Types de contrats
+### ============================================================================
+
+### Liste des types de contrats
+GET {{baseUrl}}/referentials/contract-types
+
+### Récupérer un type de contrat
+GET {{baseUrl}}/referentials/contract-types/DO
+
+
+### ============================================================================
+### RÉFÉRENTIELS - Garanties
+### ============================================================================
+
+### Liste de toutes les garanties
+GET {{baseUrl}}/referentials/guarantees
+
+### Filtrer par type de contrat (remplacer {contract_type_id} par un ID réel)
+GET {{baseUrl}}/referentials/guarantees?contract_type_id={contract_type_id}
+
+### Filtrer par catégorie
+GET {{baseUrl}}/referentials/guarantees?category=decennale
+
+### Filtrer par type de garantie
+GET {{baseUrl}}/referentials/guarantees?guarantee_type=obligatoire
+
+### Récupérer une garantie
+GET {{baseUrl}}/referentials/guarantees/DO-DEC
+
+
+### ============================================================================
+### RÉFÉRENTIELS - Clauses
+### ============================================================================
+
+### Liste de toutes les clauses
+GET {{baseUrl}}/referentials/clauses
+
+### Filtrer par catégorie
+GET {{baseUrl}}/referentials/clauses?category=exclusion
+
+### Filtrer les clauses obligatoires
+GET {{baseUrl}}/referentials/clauses?is_mandatory=true
+
+### Récupérer une clause
+GET {{baseUrl}}/referentials/clauses/EXCL-001
+
+
+### ============================================================================
+### RÉFÉRENTIELS - Catégories de bâtiments
+### ============================================================================
+
+### Liste des catégories de bâtiments
+GET {{baseUrl}}/referentials/building-categories
+
+### Récupérer une catégorie
+GET {{baseUrl}}/referentials/building-categories/HAB-COL
+
+
+### ============================================================================
+### RÉFÉRENTIELS - Catégories de travaux
+### ============================================================================
+
+### Liste des catégories de travaux
+GET {{baseUrl}}/referentials/work-categories
+
+### Récupérer une catégorie
+GET {{baseUrl}}/referentials/work-categories/CONST-NEUF
+
+
+### ============================================================================
+### RÉFÉRENTIELS - Professions
+### ============================================================================
+
+### Liste de toutes les professions
+GET {{baseUrl}}/referentials/professions
+
+### Filtrer par catégorie
+GET {{baseUrl}}/referentials/professions?category=realisateur
+
+### Récupérer une profession
+GET {{baseUrl}}/referentials/professions/ARCHI
