@@ -40,6 +40,10 @@
                     <i class="fas fa-file-contract"></i>
                     <span>Contrats</span>
                 </a>
+                <a href="#" class="nav-item" data-view="claims">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Sinistres</span>
+                </a>
                 <a href="#" class="nav-item" data-view="history">
                     <i class="fas fa-history"></i>
                     <span>Historique</span>
@@ -127,6 +131,15 @@
                                 <p>Contrats</p>
                             </div>
                         </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-red">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="stat-claims">0</h3>
+                                <p>Sinistres</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="dashboard-grid">
@@ -199,6 +212,41 @@
                     <div id="contracts-table-container"></div>
                 </div>
 
+                <!-- Claims View -->
+                <div id="claims-view" class="view">
+                    <div class="view-toolbar">
+                        <button class="btn btn-primary" onclick="showClaimModal()">
+                            <i class="fas fa-plus"></i> Nouveau sinistre
+                        </button>
+                        <div class="toolbar-filters">
+                            <select id="claim-status-filter" onchange="filterClaims()">
+                                <option value="">Tous les statuts</option>
+                                <option value="declare">Déclaré</option>
+                                <option value="pris_en_compte">Pris en compte</option>
+                                <option value="en_cours_expertise">En cours d'expertise</option>
+                                <option value="attente_pieces">Attente pièces</option>
+                                <option value="accepte">Accepté</option>
+                                <option value="refuse">Refusé</option>
+                                <option value="regle">Réglé</option>
+                                <option value="cloture">Clôturé</option>
+                            </select>
+                            <select id="claim-type-filter" onchange="filterClaims()">
+                                <option value="">Tous les types</option>
+                                <option value="structurel">Structurel</option>
+                                <option value="degats_des_eaux">Dégâts des eaux</option>
+                                <option value="incendie">Incendie</option>
+                                <option value="intemperies">Intempéries</option>
+                                <option value="vol">Vol</option>
+                                <option value="vandalisme">Vandalisme</option>
+                                <option value="malfacons">Malfaçons</option>
+                                <option value="rc">Responsabilité civile</option>
+                                <option value="autre">Autre</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="claims-table-container"></div>
+                </div>
+
                 <!-- History View -->
                 <div id="history-view" class="view">
                     <div class="view-toolbar">
@@ -255,6 +303,26 @@
                                 </div>
                                 <p class="progress-text">Génération en cours...</p>
                             </div>
+                        </div>
+
+                        <div class="generate-card">
+                            <h3><i class="fas fa-exclamation-triangle"></i> Génération de sinistres</h3>
+                            
+                            <div class="form-group">
+                                <label for="gen-claims-count">Nombre de sinistres à générer</label>
+                                <input type="number" id="gen-claims-count" min="1" max="100" value="15">
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="gen-claims-clean">
+                                    Nettoyer les sinistres existants avant génération
+                                </label>
+                            </div>
+
+                            <button class="btn btn-primary btn-large" onclick="generateClaims()">
+                                <i class="fas fa-plus"></i> Générer les sinistres
+                            </button>
                         </div>
 
                         <div class="generate-card danger-zone">

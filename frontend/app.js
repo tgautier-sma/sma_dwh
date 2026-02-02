@@ -108,6 +108,10 @@ async function performSearch(query) {
         return;
     }
     
+    if (query.trim().length < 3) {
+        return;
+    }
+    
     try {
         const results = await api.searchClients(query, app.phoneticMode);
         
@@ -141,6 +145,9 @@ async function loadViewData(viewName) {
         case 'contracts':
             await loadContracts();
             break;
+        case 'claims':
+            await loadClaims();
+            break;
         case 'history':
             await loadHistory();
             break;
@@ -154,11 +161,13 @@ async function loadViewData(viewName) {
 async function loadDashboard() {
     try {
         const stats = await api.getStats();
+        const claimsStats = await api.getClaimsStats();
         
         document.getElementById('stat-clients').textContent = stats.total_clients || 0;
         document.getElementById('stat-addresses').textContent = stats.total_addresses || 0;
         document.getElementById('stat-sites').textContent = stats.total_construction_sites || 0;
         document.getElementById('stat-contracts').textContent = stats.total_contracts || 0;
+        document.getElementById('stat-claims').textContent = claimsStats.total_claims || 0;
         
         // Recent activity - simplified without loading contracts
         displayRecentActivity([]);
@@ -397,6 +406,141 @@ async function loadContracts() {
     }
 }
 
+// Claims
+async function loadClaims() {
+    try {
+        const claims = await api.getClaims();
+        app.data.claims = claims;
+        displayClaims(claims);
+    } catch (error) {
+        console.error('Error loading claims:', error);
+        showToast('error', 'Erreur', 'Impossible de charger les sinistres');
+    }
+}
+
+function displayClaims(claims) {
+    const container = document.getElementById('claims-table-container');
+    
+    if (!claims || claims.length === 0) {
+        container.innerHTML = '<p class="help-text">Aucun sinistre trouvé</p>';
+        return;
+    }
+    
+    const html = `
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Numéro</th>
+                        <th>Titre</th>
+                        <th>Type</th>
+                        <th>Statut</th>
+                        <th>Gravité</th>
+                        <th>Date déclaration</th>
+                        <th>Montant réclamé</th>
+                        <th>Montant réservé</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${claims.map(claim => `
+                        <tr>
+                            <td><strong>${claim.claim_number}</strong></td>
+                            <td>${claim.title}</td>
+                            <td><span class="badge badge-info">${claim.claim_type}</span></td>
+                            <td><span class="badge badge-${getClaimStatusBadge(claim.status)}">${claim.status}</span></td>
+                            <td><span class="badge badge-${getSeverityBadge(claim.severity)}">${claim.severity}</span></td>
+                            <td>${formatDate(claim.declaration_date)}</td>
+                            <td>${formatCurrency(claim.claimed_amount)}</td>
+                            <td>${formatCurrency(claim.reserved_amount)}</td>
+                            <td>
+                                <div class="table-actions">
+                                    <button class="btn-edit" onclick="showClaimModal('${claim.claim_number}')" title="Voir/Modifier">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn-delete" onclick="deleteClaim('${claim.claim_number}')" title="Supprimer">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+async function filterClaims() {
+    const statusFilter = document.getElementById('claim-status-filter').value;
+    const typeFilter = document.getElementById('claim-type-filter').value;
+    
+    let filtered = app.data.claims || [];
+    
+    if (statusFilter !== 'all') {
+        filtered = filtered.filter(c => c.status === statusFilter);
+    }
+    
+    if (typeFilter !== 'all') {
+        filtered = filtered.filter(c => c.claim_type === typeFilter);
+    }
+    
+    displayClaims(filtered);
+}
+
+async function showClaimModal(claimNumber = null) {
+    // TODO: Implement modal for viewing/editing claim details
+    if (claimNumber) {
+        try {
+            const claim = await api.getClaim(claimNumber);
+            console.log('Claim details:', claim);
+            showToast('info', 'Info', `Détails du sinistre ${claimNumber}`);
+        } catch (error) {
+            console.error('Error loading claim:', error);
+            showToast('error', 'Erreur', 'Impossible de charger les détails du sinistre');
+        }
+    }
+}
+
+async function deleteClaim(claimNumber) {
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer le sinistre ${claimNumber} ?`)) return;
+    
+    try {
+        await api.deleteClaim(claimNumber);
+        showToast('success', 'Succès', 'Sinistre supprimé');
+        await loadClaims();
+    } catch (error) {
+        console.error('Error deleting claim:', error);
+        showToast('error', 'Erreur', 'Impossible de supprimer le sinistre');
+    }
+}
+
+function getClaimStatusBadge(status) {
+    const badges = {
+        'declared': 'warning',
+        'acknowledged': 'info',
+        'investigating': 'info',
+        'expertise_ongoing': 'info',
+        'settlement_pending': 'warning',
+        'settled': 'success',
+        'rejected': 'danger',
+        'closed': 'secondary'
+    };
+    return badges[status] || 'secondary';
+}
+
+function getSeverityBadge(severity) {
+    const badges = {
+        'minor': 'success',
+        'moderate': 'warning',
+        'major': 'danger',
+        'critical': 'danger'
+    };
+    return badges[severity] || 'secondary';
+}
+
 function displayContracts(contracts) {
     const container = document.getElementById('contracts-table-container');
     
@@ -612,6 +756,44 @@ ${result.output || 'Aucun log disponible'}
     } catch (error) {
         console.error('Erreur suppression:', error);
         showToast('error', 'Erreur', error.message || 'Impossible de supprimer les données');
+    }
+}
+
+async function generateClaims() {
+    const count = parseInt(document.getElementById('gen-claims-count').value);
+    const clean = document.getElementById('gen-claims-clean').checked;
+    
+    const confirmMsg = clean 
+        ? `⚠️ ATTENTION : Êtes-vous sûr de vouloir SUPPRIMER tous les sinistres existants et générer ${count} nouveaux sinistres ?`
+        : `Êtes-vous sûr de vouloir générer ${count} nouveaux sinistres ?`;
+    
+    if (!confirm(confirmMsg)) return;
+    
+    showToast('info', 'Génération en cours', 'Génération des sinistres...');
+    
+    try {
+        const result = await api.generateClaims(count, clean);
+        showToast('success', 'Succès', result.message);
+        
+        // Afficher les détails dans une modale
+        showModal(
+            'Génération de sinistres terminée',
+            `<div style="color: var(--success-color); font-weight: 600; margin-bottom: 16px;">
+                ✅ ${result.message}
+            </div>
+            <p style="margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+                Rechargez la page pour voir les nouveaux sinistres dans le tableau de bord.
+            </p>`,
+            null
+        );
+        
+        // Recharger les statistiques
+        setTimeout(() => {
+            loadDashboard();
+        }, 1000);
+    } catch (error) {
+        console.error('Erreur génération sinistres:', error);
+        showToast('error', 'Erreur', error.message || 'Impossible de générer les sinistres');
     }
 }
 

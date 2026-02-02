@@ -526,3 +526,133 @@ class ContractStatistics(BaseModel):
     cancelled_contracts: int
     total_premium_volume: float
     average_premium: float
+
+
+# =============================================================================
+# SCHÉMAS SINISTRE
+# =============================================================================
+
+class ClaimStatusEnum(str, Enum):
+    DECLARED = "declare"
+    ACKNOWLEDGED = "pris_en_compte"
+    INVESTIGATING = "en_cours_expertise"
+    PENDING_DOCS = "attente_pieces"
+    ACCEPTED = "accepte"
+    REJECTED = "refuse"
+    SETTLED = "regle"
+    CLOSED = "cloture"
+
+
+class ClaimTypeEnum(str, Enum):
+    STRUCTURAL = "structurel"
+    WATER_DAMAGE = "degats_des_eaux"
+    FIRE = "incendie"
+    WEATHER = "intemperies"
+    THEFT = "vol"
+    VANDALISM = "vandalisme"
+    DEFECT = "malfacons"
+    CIVIL_LIABILITY = "rc"
+    OTHER = "autre"
+
+
+class ClaimSeverityEnum(str, Enum):
+    MINOR = "mineur"
+    MODERATE = "moyen"
+    MAJOR = "grave"
+    CRITICAL = "tres_grave"
+
+
+class ClaimBase(BaseModel):
+    """Schéma de base pour un sinistre"""
+    claim_number: str = Field(..., description="Numéro unique du sinistre")
+    external_reference: Optional[str] = None
+    contract_id: int = Field(..., description="ID du contrat associé")
+    construction_site_id: Optional[int] = None
+    claim_type: ClaimTypeEnum
+    severity: Optional[ClaimSeverityEnum] = None
+    status: ClaimStatusEnum = ClaimStatusEnum.DECLARED
+    incident_date: datetime = Field(..., description="Date du sinistre")
+    declaration_date: datetime = Field(..., description="Date de déclaration")
+    title: str = Field(..., max_length=200, description="Titre du sinistre")
+    description: str = Field(..., description="Description détaillée")
+    circumstances: Optional[str] = None
+    affected_area: Optional[str] = None
+    floor: Optional[str] = None
+    estimated_amount: Optional[float] = None
+    declared_by: Optional[str] = None
+
+
+class ClaimCreate(ClaimBase):
+    """Schéma pour créer un sinistre"""
+    pass
+
+
+class ClaimUpdate(BaseModel):
+    """Schéma pour mettre à jour un sinistre"""
+    external_reference: Optional[str] = None
+    claim_type: Optional[ClaimTypeEnum] = None
+    severity: Optional[ClaimSeverityEnum] = None
+    status: Optional[ClaimStatusEnum] = None
+    acknowledgment_date: Optional[datetime] = None
+    settlement_date: Optional[datetime] = None
+    closure_date: Optional[datetime] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    circumstances: Optional[str] = None
+    affected_area: Optional[str] = None
+    floor: Optional[str] = None
+    estimated_amount: Optional[float] = None
+    expert_amount: Optional[float] = None
+    franchise_applied: Optional[float] = None
+    indemnity_amount: Optional[float] = None
+    reserve_amount: Optional[float] = None
+    expert_name: Optional[str] = None
+    expert_company: Optional[str] = None
+    activated_guarantees: Optional[List[str]] = None
+    attached_documents: Optional[List[dict]] = None
+    has_photos: Optional[bool] = None
+    has_expert_report: Optional[bool] = None
+    has_repair_quote: Optional[bool] = None
+    third_party_involved: Optional[bool] = None
+    third_party_info: Optional[dict] = None
+    police_report_number: Optional[str] = None
+    repair_status: Optional[str] = None
+    repair_company: Optional[str] = None
+    repair_start_date: Optional[date] = None
+    repair_end_date: Optional[date] = None
+    internal_notes: Optional[str] = None
+    expert_conclusions: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+
+class Claim(ClaimBase):
+    """Schéma complet d'un sinistre"""
+    id: int
+    acknowledgment_date: Optional[datetime] = None
+    settlement_date: Optional[datetime] = None
+    closure_date: Optional[datetime] = None
+    expert_amount: Optional[float] = None
+    franchise_applied: Optional[float] = None
+    indemnity_amount: Optional[float] = None
+    reserve_amount: Optional[float] = None
+    expert_name: Optional[str] = None
+    expert_company: Optional[str] = None
+    activated_guarantees: Optional[List[str]] = None
+    attached_documents: Optional[List[dict]] = None
+    has_photos: bool = False
+    has_expert_report: bool = False
+    has_repair_quote: bool = False
+    third_party_involved: bool = False
+    third_party_info: Optional[dict] = None
+    police_report_number: Optional[str] = None
+    repair_status: Optional[str] = None
+    repair_company: Optional[str] = None
+    repair_start_date: Optional[date] = None
+    repair_end_date: Optional[date] = None
+    internal_notes: Optional[str] = None
+    expert_conclusions: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

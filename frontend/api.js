@@ -56,7 +56,7 @@ class API {
     }
 
     async searchClients(query, phonetic = false) {
-        return this.request(`/clients/search?q=${encodeURIComponent(query)}&phonetic=${phonetic}`);
+        return this.request(`/clients/search?query=${encodeURIComponent(query)}&phonetic=${phonetic}`);
     }
 
     async createClient(clientData) {
@@ -257,6 +257,48 @@ class API {
         return this.request('/referentials/professions', 'POST', data);
     }
 
+    // Claims
+    async getClaims(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/claims/?${queryString}`);
+    }
+
+    async getClaim(claimNumber) {
+        return this.request(`/claims/${claimNumber}`);
+    }
+
+    async searchClaims(query) {
+        return this.request(`/claims/search?query=${encodeURIComponent(query)}`);
+    }
+
+    async getClaimsByContract(contractId) {
+        return this.request(`/claims/contract/${contractId}`);
+    }
+
+    async getClaimsStats() {
+        return this.request('/claims/stats');
+    }
+
+    async createClaim(claimData) {
+        return this.request('/claims/', {
+            method: 'POST',
+            body: JSON.stringify(claimData),
+        });
+    }
+
+    async updateClaim(claimNumber, claimData) {
+        return this.request(`/claims/${claimNumber}`, {
+            method: 'PUT',
+            body: JSON.stringify(claimData),
+        });
+    }
+
+    async deleteClaim(claimNumber) {
+        return this.request(`/claims/${claimNumber}`, {
+            method: 'DELETE',
+        });
+    }
+
     // Data Generation (via Python script - simulate with API calls)
     async generateData(count, type, clean) {
         return this.request('/generate-data', {
@@ -264,6 +306,16 @@ class API {
             body: JSON.stringify({
                 count: count,
                 client_type: type,
+                clean: clean
+            })
+        });
+    }
+
+    async generateClaims(count, clean) {
+        return this.request('/generate-claims', {
+            method: 'POST',
+            body: JSON.stringify({
+                count: count,
                 clean: clean
             })
         });

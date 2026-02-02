@@ -13,7 +13,7 @@ import os
 
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import clients, contracts, sites, referentials, addresses, history
+from app.routers import clients, contracts, sites, referentials, addresses, history, claims
 
 
 @asynccontextmanager
@@ -70,6 +70,7 @@ app.include_router(contracts.router)
 app.include_router(sites.router)
 app.include_router(referentials.router)
 app.include_router(history.router)
+app.include_router(claims.router)
 
 # Montage des fichiers statiques pour le front-end
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
@@ -140,6 +141,11 @@ def get_statistics(db: Session = Depends(get_db)):
 class DataGenerationRequest(BaseModel):
     count: int = 5
     client_type: str = "mixte"
+    clean: bool = False
+
+
+class ClaimsGenerationRequest(BaseModel):
+    count: int = 15
     clean: bool = False
 
 
@@ -228,6 +234,54 @@ async def clean_data():
             )
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="La suppression a pris trop de temps (timeout)")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@app.post("/generate-claims/", tags=["Data Generation"])
+@app.post("/generate-claims", tags=["Data Generation"])
+async def generate_claims(request: ClaimsGenerationRequest):
+    """
+    Générer des sinistres de test en lançant le script generate_claims.py
+    """
+    script_path = os.path.join(os.path.dirname(__file__), "generate_claims.py")
+    
+    if not os.path.exists(script_path):
+        raise HTTPException(status_code=500, detail="Script de génération de sinistres introuvable")
+    
+    # Construction de la commande
+    cmd = ["python3", script_path, "--create", "--count", str(request.count)]
+    
+    if request.clean:
+        cmd.insert(2, "--clean")
+    
+    try:
+        # Exécution du script
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minutes max
+        )
+        
+        if result.returncode == 0:
+            return {
+                "status": "success",
+                "message": f"Génération terminée : {request.count} sinistres créés",
+                "output": result.stdout,
+                "clean": request.clean
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "Erreur lors de la génération des sinistres",
+                    "error": result.stderr,
+                    "output": result.stdout
+                }
+            )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="La génération des sinistres a pris trop de temps (timeout)")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 

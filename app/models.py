@@ -1375,3 +1375,148 @@ DEFAULT_EXCLUSIONS = [
         "rachat_conditions": "Respect des préconisations de l'étude de sol et des règles de construction adaptées"
     }
 ]
+
+
+# =============================================================================
+# MODÈLE SINISTRE CONSTRUCTION
+# =============================================================================
+
+class ClaimStatusEnum(str, enum.Enum):
+    """Statuts d'un sinistre"""
+    DECLARED = "declare"  # Sinistre déclaré
+    ACKNOWLEDGED = "pris_en_compte"  # Prise en compte par l'assureur
+    INVESTIGATING = "en_cours_expertise"  # Expertise en cours
+    PENDING_DOCS = "attente_pieces"  # En attente de pièces complémentaires
+    ACCEPTED = "accepte"  # Accepté par l'assureur
+    REJECTED = "refuse"  # Refusé
+    SETTLED = "regle"  # Indemnisé
+    CLOSED = "cloture"  # Clôturé
+
+
+class ClaimTypeEnum(str, enum.Enum):
+    """Types de sinistres construction"""
+    STRUCTURAL = "structurel"  # Dommages structurels (décennale)
+    WATER_DAMAGE = "degats_des_eaux"  # Dégâts des eaux
+    FIRE = "incendie"  # Incendie
+    WEATHER = "intemperies"  # Intempéries
+    THEFT = "vol"  # Vol de matériaux/équipements
+    VANDALISM = "vandalisme"  # Vandalisme
+    DEFECT = "malfacons"  # Malfaçons
+    CIVIL_LIABILITY = "rc"  # Responsabilité civile
+    OTHER = "autre"  # Autre
+
+
+class ClaimSeverityEnum(str, enum.Enum):
+    """Gravité du sinistre"""
+    MINOR = "mineur"  # < 10k€
+    MODERATE = "moyen"  # 10k-50k€
+    MAJOR = "grave"  # 50k-200k€
+    CRITICAL = "tres_grave"  # > 200k€
+
+
+class ClaimModel(Base):
+    """Sinistre construction relié à un contrat"""
+    __tablename__ = "fake_claims"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Identification
+    claim_number = Column(String(30), unique=True, nullable=False, index=True)
+    external_reference = Column(String(50), nullable=True)  # Référence assureur
+    
+    # Relations
+    contract_id = Column(Integer, ForeignKey("fake_client_contracts.id"), nullable=False)
+    contract = relationship("ClientContractModel", backref="claims")
+    
+    construction_site_id = Column(Integer, ForeignKey("fake_construction_sites.id"), nullable=True)
+    construction_site = relationship("ConstructionSiteModel", backref="claims")
+    
+    # Type et gravité
+    claim_type = Column(String(30), nullable=False)  # ClaimTypeEnum
+    severity = Column(String(20), nullable=True)  # ClaimSeverityEnum
+    status = Column(String(30), default="declare")  # ClaimStatusEnum
+    
+    # Dates
+    incident_date = Column(DateTime, nullable=False)  # Date du sinistre
+    declaration_date = Column(DateTime, nullable=False)  # Date de déclaration
+    acknowledgment_date = Column(DateTime, nullable=True)  # Date de prise en compte
+    settlement_date = Column(DateTime, nullable=True)  # Date d'indemnisation
+    closure_date = Column(DateTime, nullable=True)  # Date de clôture
+    
+    # Description
+    title = Column(String(200), nullable=False)  # Titre court
+    description = Column(Text, nullable=False)  # Description détaillée
+    circumstances = Column(Text, nullable=True)  # Circonstances
+    
+    # Localisation dans le bâtiment
+    affected_area = Column(String(200), nullable=True)  # Zone affectée
+    floor = Column(String(50), nullable=True)  # Étage
+    
+    # Montants
+    estimated_amount = Column(Float, nullable=True)  # Montant estimé initial
+    expert_amount = Column(Float, nullable=True)  # Montant après expertise
+    franchise_applied = Column(Float, nullable=True)  # Franchise appliquée
+    indemnity_amount = Column(Float, nullable=True)  # Montant indemnisé
+    reserve_amount = Column(Float, nullable=True)  # Montant de la réserve
+    
+    # Intervenants
+    declared_by = Column(String(200), nullable=True)  # Déclarant
+    expert_name = Column(String(200), nullable=True)  # Expert désigné
+    expert_company = Column(String(200), nullable=True)  # Cabinet d'expertise
+    
+    # Garanties activées
+    activated_guarantees = Column(JSON, nullable=True)  # Codes des garanties activées
+    """
+    Format: ["GAR_DEC_01", "GAR_BIEN_02"]
+    """
+    
+    # Documents
+    attached_documents = Column(JSON, nullable=True)  # Liste des documents
+    """
+    Format: [
+        {"type": "constat", "name": "constat_huissier.pdf", "date": "2024-01-15"},
+        {"type": "photos", "name": "photos_degats.zip", "date": "2024-01-15"}
+    ]
+    """
+    
+    # Photos et constatations
+    has_photos = Column(Boolean, default=False)
+    has_expert_report = Column(Boolean, default=False)
+    has_repair_quote = Column(Boolean, default=False)
+    
+    # Responsabilité
+    third_party_involved = Column(Boolean, default=False)  # Tiers impliqué
+    third_party_info = Column(JSON, nullable=True)  # Infos sur le tiers
+    police_report_number = Column(String(50), nullable=True)  # N° de dépôt de plainte
+    
+    # Réparations
+    repair_status = Column(String(50), nullable=True)  # Statut des réparations
+    repair_company = Column(String(200), nullable=True)  # Entreprise de réparation
+    repair_start_date = Column(Date, nullable=True)
+    repair_end_date = Column(Date, nullable=True)
+    
+    # Notes
+    internal_notes = Column(Text, nullable=True)
+    expert_conclusions = Column(Text, nullable=True)
+    rejection_reason = Column(Text, nullable=True)  # Si refusé
+    
+    # Métadonnées
+    created_by = Column(String(36), nullable=True)
+    updated_by = Column(String(36), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<Claim(number={self.claim_number}, type={self.claim_type}, status={self.status})>"
+    
+    @property
+    def processing_days(self):
+        """Nombre de jours depuis la déclaration"""
+        if self.closure_date:
+            return (self.closure_date.date() - self.declaration_date.date()).days
+        return (date.today() - self.declaration_date.date()).days
+    
+    @property
+    def is_open(self):
+        """Vérifie si le sinistre est toujours ouvert"""
+        return self.status not in [ClaimStatusEnum.SETTLED.value, ClaimStatusEnum.CLOSED.value, ClaimStatusEnum.REJECTED.value]
