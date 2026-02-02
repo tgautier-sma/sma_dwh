@@ -81,6 +81,7 @@ def soundex_fr(text: str) -> str:
 # =============================================================================
 
 @router.post("/", response_model=schemas.Client, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=schemas.Client, status_code=status.HTTP_201_CREATED)
 def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
     """Créer un nouveau client"""
     # Vérifier si le numéro client existe déjà
@@ -96,6 +97,7 @@ def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[schemas.Client])
+@router.get("", response_model=List[schemas.Client])
 def list_clients(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),

@@ -1,6 +1,7 @@
 """Application principale FastAPI"""
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -37,8 +38,21 @@ app = FastAPI(
     title=settings.API_TITLE,
     version=settings.API_VERSION,
     description=settings.API_DESCRIPTION,
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False  # Désactiver la redirection automatique des slashes
 )
+
+# Middleware pour gérer les headers de proxy (HTTPS)
+@app.middleware("http")
+async def proxy_headers_middleware(request: Request, call_next):
+    """Middleware pour gérer les headers X-Forwarded-* du proxy"""
+    # Si on est derrière un proxy HTTPS, on doit récupérer le bon schéma
+    forwarded_proto = request.headers.get("X-Forwarded-Proto")
+    if forwarded_proto:
+        request.scope["scheme"] = forwarded_proto
+    
+    response = await call_next(request)
+    return response
 
 # Configuration CORS
 app.add_middleware(
@@ -88,6 +102,7 @@ def health_check():
 
 
 @app.get("/stats/", tags=["Statistics"])
+@app.get("/stats", tags=["Statistics"])
 def get_statistics(db: Session = Depends(get_db)):
     """Obtenir les statistiques globales de la base de données"""
     from app.models import ClientModel, ClientAddressModel, ConstructionSiteModel, ClientContractModel
@@ -129,6 +144,7 @@ class DataGenerationRequest(BaseModel):
 
 
 @app.post("/generate-data/", tags=["Data Generation"])
+@app.post("/generate-data", tags=["Data Generation"])
 async def generate_data(request: DataGenerationRequest, background_tasks: BackgroundTasks):
     """
     Générer des données de test en lançant le script generate_client_data.py
@@ -176,6 +192,7 @@ async def generate_data(request: DataGenerationRequest, background_tasks: Backgr
 
 
 @app.post("/clean-data/", tags=["Data Generation"])
+@app.post("/clean-data", tags=["Data Generation"])
 async def clean_data():
     """
     Supprimer toutes les données en lançant le script avec --clean

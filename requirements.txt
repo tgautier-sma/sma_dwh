@@ -12,6 +12,7 @@ alembic==1.14.0
 # Utilitaires
 python-dotenv==1.0.1
 python-multipart==0.0.12
+Faker==30.8.2
 
 # Date et temps
 python-dateutil==2.9.0

@@ -10,6 +10,7 @@ router = APIRouter(prefix="/addresses", tags=["Addresses"])
 
 
 @router.get("/", response_model=List[dict])
+@router.get("", response_model=List[dict])
 def get_all_addresses(
     skip: int = 0,
     limit: int = 100,

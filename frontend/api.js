@@ -6,10 +6,12 @@ const API_BASE_URL = '';
 class API {
     constructor(baseUrl) {
         this.baseUrl = baseUrl;
+        console.log('API initialized with baseUrl:', this.baseUrl);
     }
 
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
+        console.log('API request to:', url, 'Full URL:', new URL(url, window.location.origin).href);
         
         try {
             const response = await fetch(url, {
@@ -28,6 +30,7 @@ class API {
             return await response.json();
         } catch (error) {
             console.error('API Error:', error);
+            console.error('Failed URL:', url);
             throw error;
         }
     }
@@ -57,7 +60,7 @@ class API {
     }
 
     async createClient(clientData) {
-        return this.request('/clients/', {
+        return this.request('/clients', {
             method: 'POST',
             body: JSON.stringify(clientData),
         });
@@ -78,7 +81,7 @@ class API {
 
     // Addresses
     async getAddresses(clientId = null) {
-        const endpoint = clientId ? `/clients/${clientId}/addresses` : '/addresses/';
+        const endpoint = clientId ? `/clients/${clientId}/addresses` : '/addresses';
         return this.request(endpoint);
     }
 
@@ -87,7 +90,7 @@ class API {
     }
 
     async createAddress(addressData) {
-        return this.request('/addresses/', {
+        return this.request('/addresses', {
             method: 'POST',
             body: JSON.stringify(addressData),
         });
@@ -108,7 +111,7 @@ class API {
 
     // Construction Sites
     async getSites(clientId = null) {
-        const endpoint = clientId ? `/clients/${clientId}/construction-sites` : '/construction-sites/';
+        const endpoint = clientId ? `/clients/${clientId}/construction-sites` : '/construction-sites';
         return this.request(endpoint);
     }
 
@@ -117,7 +120,7 @@ class API {
     }
 
     async createSite(siteData) {
-        return this.request('/construction-sites/', {
+        return this.request('/construction-sites', {
             method: 'POST',
             body: JSON.stringify(siteData),
         });
@@ -138,7 +141,7 @@ class API {
 
     // Contracts
     async getContracts(clientId = null, params = {}) {
-        const endpoint = clientId ? `/clients/${clientId}/contracts` : '/contracts/';
+        const endpoint = clientId ? `/clients/${clientId}/contracts` : '/contracts';
         const queryString = new URLSearchParams(params).toString();
         return this.request(`${endpoint}?${queryString}`);
     }
@@ -148,7 +151,7 @@ class API {
     }
 
     async createContract(contractData) {
-        return this.request('/contracts/', {
+        return this.request('/contracts', {
             method: 'POST',
             body: JSON.stringify(contractData),
         });
@@ -169,18 +172,18 @@ class API {
 
     // Contract History
     async getContractHistory(contractId = null) {
-        const endpoint = contractId ? `/contracts/${contractId}/history` : '/contract-history/';
+        const endpoint = contractId ? `/contracts/${contractId}/history` : '/contract-history';
         return this.request(endpoint);
     }
 
     // Statistics
     async getStats() {
-        return this.request('/stats/');
+        return this.request('/stats');
     }
 
     // Referentials
     async getContractTypes() {
-        return this.request('/referentials/contract-types/');
+        return this.request('/referentials/contract-types');
     }
 
     async getContractType(code) {
@@ -194,7 +197,7 @@ class API {
     async getGuaranteeTypes(contractTypeCode = null) {
         const endpoint = contractTypeCode 
             ? `/referentials/contract-types/${contractTypeCode}/guarantees`
-            : '/referentials/guarantees/';
+            : '/referentials/guarantees';
         return this.request(endpoint);
     }
 
@@ -207,7 +210,7 @@ class API {
     }
 
     async getClauses() {
-        return this.request('/referentials/clauses/');
+        return this.request('/referentials/clauses');
     }
 
     async getClause(code) {
@@ -219,7 +222,7 @@ class API {
     }
 
     async getBuildingCategories() {
-        return this.request('/referentials/building-categories/');
+        return this.request('/referentials/building-categories');
     }
 
     async getBuildingCategory(code) {
@@ -231,7 +234,7 @@ class API {
     }
 
     async getWorkCategories() {
-        return this.request('/referentials/work-categories/');
+        return this.request('/referentials/work-categories');
     }
 
     async getWorkCategory(code) {
@@ -243,7 +246,7 @@ class API {
     }
 
     async getProfessions() {
-        return this.request('/referentials/professions/');
+        return this.request('/referentials/professions');
     }
 
     async getProfession(code) {
@@ -256,7 +259,7 @@ class API {
 
     // Data Generation (via Python script - simulate with API calls)
     async generateData(count, type, clean) {
-        return this.request('/generate-data/', {
+        return this.request('/generate-data', {
             method: 'POST',
             body: JSON.stringify({
                 count: count,
@@ -267,7 +270,7 @@ class API {
     }
 
     async deleteAllData() {
-        return this.request('/clean-data/', {
+        return this.request('/clean-data', {
             method: 'POST'
         });
     }

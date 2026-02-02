@@ -12,6 +12,7 @@ router = APIRouter(prefix="/construction-sites", tags=["Chantiers"])
 
 
 @router.post("/", response_model=schemas.ConstructionSite, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=schemas.ConstructionSite, status_code=status.HTTP_201_CREATED)
 def create_site(site: schemas.ConstructionSiteCreate, db: Session = Depends(get_db)):
     """Créer un nouveau chantier"""
     # Vérifier que la référence n'existe pas
@@ -30,6 +31,7 @@ def create_site(site: schemas.ConstructionSiteCreate, db: Session = Depends(get_
 
 
 @router.get("/", response_model=List[schemas.ConstructionSite])
+@router.get("", response_model=List[schemas.ConstructionSite])
 def list_sites(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),

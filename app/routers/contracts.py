@@ -12,6 +12,7 @@ router = APIRouter(prefix="/contracts", tags=["Contrats"])
 
 
 @router.post("/", response_model=schemas.ClientContract, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=schemas.ClientContract, status_code=status.HTTP_201_CREATED)
 def create_contract(contract: schemas.ClientContractCreate, db: Session = Depends(get_db)):
     """Créer un nouveau contrat"""
     # Vérifier que le client existe
@@ -41,6 +42,7 @@ def create_contract(contract: schemas.ClientContractCreate, db: Session = Depend
 
 
 @router.get("/", response_model=List[schemas.ClientContract])
+@router.get("", response_model=List[schemas.ClientContract])
 def list_contracts(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),

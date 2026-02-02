@@ -11,6 +11,7 @@ router = APIRouter(prefix="/contract-history", tags=["Contract History"])
 
 
 @router.get("/", response_model=List[dict])
+@router.get("", response_model=List[dict])
 def get_contract_history(
     contract_id: Optional[int] = None,
     action: Optional[str] = None,
