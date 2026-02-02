@@ -1,5 +1,6 @@
 // API Configuration
-const API_BASE_URL = 'http://localhost:8000';
+// Utiliser une URL relative pour que ça fonctionne avec n'importe quel domaine
+const API_BASE_URL = '';
 
 // API Client
 class API {
