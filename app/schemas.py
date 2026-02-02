@@ -152,7 +152,7 @@ class ClientAddressBase(BaseModel):
 
 class ClientAddressCreate(ClientAddressBase):
     """Schéma pour créer une adresse client"""
-    client_id: str
+    client_id: int
 
 
 class ClientAddressUpdate(BaseModel):
@@ -175,7 +175,7 @@ class ClientAddressUpdate(BaseModel):
 class ClientAddress(ClientAddressBase):
     """Schéma de réponse pour une adresse client"""
     id: int
-    client_id: str
+    client_id: int
     created_at: datetime
     updated_at: datetime
 
@@ -257,8 +257,8 @@ class ClientContractBase(BaseModel):
     contract_number: str
     external_reference: Optional[str] = None
     contract_type_code: str
-    client_id: str
-    construction_site_id: Optional[str] = None
+    client_id: int
+    construction_site_id: Optional[int] = None
     status: ContractStatusEnum = ContractStatusEnum.DRAFT
     issue_date: Optional[date] = None
     effective_date: Optional[date] = None
@@ -270,8 +270,8 @@ class ClientContractBase(BaseModel):
     franchise_amount: Optional[float] = None
     duration_years: int = 10
     is_renewable: bool = False
-    selected_guarantees: Optional[dict] = None
-    selected_clauses: Optional[dict] = None
+    selected_guarantees: Optional[List[dict]] = None
+    selected_clauses: Optional[List[dict]] = None
     specific_exclusions: Optional[dict] = None
     special_conditions: Optional[str] = None
     broker_name: Optional[str] = None
@@ -294,8 +294,8 @@ class ClientContractUpdate(BaseModel):
     expiry_date: Optional[date] = None
     insured_amount: Optional[float] = None
     annual_premium: Optional[float] = None
-    selected_guarantees: Optional[dict] = None
-    selected_clauses: Optional[dict] = None
+    selected_guarantees: Optional[List[dict]] = None
+    selected_clauses: Optional[List[dict]] = None
     internal_notes: Optional[str] = None
 
 
@@ -347,7 +347,7 @@ class GuaranteeBase(BaseModel):
     description: Optional[str] = None
     category: str
     guarantee_type: GuaranteeTypeEnum
-    contract_type_id: Optional[str] = None
+    contract_type_id: Optional[int] = None
     duration_years: Optional[int] = None
     duration_description: Optional[str] = None
     legal_reference: Optional[str] = None

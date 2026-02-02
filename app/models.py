@@ -319,6 +319,9 @@ class ClientContractModel(Base):
     construction_site_id = Column(Integer, ForeignKey("fake_construction_sites.id"), nullable=True)
     construction_site = relationship("ConstructionSiteModel", back_populates="contracts")
     
+    # Relation historique
+    history = relationship("ContractHistoryModel", back_populates="contract", cascade="all, delete-orphan")
+    
     # Statut
     status = Column(String(30), default="brouillon")  # ContractStatusEnum
     
@@ -406,6 +409,7 @@ class ContractHistoryModel(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     contract_id = Column(Integer, ForeignKey("fake_client_contracts.id"), nullable=False)
+    contract = relationship("ClientContractModel", back_populates="history")
     
     # Type de modification
     action = Column(String(50), nullable=False)  # create, update, status_change, etc.

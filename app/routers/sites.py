@@ -8,7 +8,7 @@ from app.database import get_db
 from app import schemas
 from app.models import ConstructionSiteModel
 
-router = APIRouter(prefix="/sites", tags=["Chantiers"])
+router = APIRouter(prefix="/construction-sites", tags=["Chantiers"])
 
 
 @router.post("/", response_model=schemas.ConstructionSite, status_code=status.HTTP_201_CREATED)

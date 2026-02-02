@@ -1,53 +1,435 @@
-# API FastAPI Gestion Assurance Construction
+# Serveur FastAPI - Gestion d'assurances
 
-API REST pour gérer les données d'assurance construction stockées sur PostgreSQL.
+API RESTful pour la gestion de données d'assurance sur PostgreSQL.
 
-## 🚀 Fonctionnalités
+## 🚀 Démarrage
 
-- **Gestion des clients** : CRUD complet pour les clients (particuliers, entreprises, professionnels)
-- **Gestion des adresses** : Sièges sociaux, entrepôts, chantiers
-- **Gestion des contrats** : Contrats d'assurance DO, RCD, TRC, etc.
-- **Gestion des chantiers** : Ouvrages et sites de construction
-- **Référentiels** : Types de contrats, garanties, clauses, catégories, professions
+### Installation des dépendances
 
-## 📋 Prérequis
-
-- Python 3.8+
-- PostgreSQL 12+
-- pip
-
-## 🔧 Installation
-
-1. **Cloner le projet** (si applicable)
-
-2. **Installer les dépendances**
 ```bash
-pip install -r requirements.txt
+pip install fastapi==0.115.0 uvicorn sqlalchemy psycopg2-binary faker
 ```
 
-3. **Configurer la base de données**
+### Configuration de la base de données
 
-Créer un fichier `.env` à la racine du projet :
+La connexion PostgreSQL est configurée dans `app/database.py` :
+- Serveur : gautiersa.fr:5432
+- Base de données : dwh
+- Utilisateur : autogere
+
+### Démarrage du serveur
+
 ```bash
-cp .env.example .env
+python3 main.py
 ```
 
-Modifier le fichier `.env` avec vos paramètres :
-```env
-DATABASE_HOST=gautiersa.fr
-DATABASE_PORT=5432
-DATABASE_NAME=insurance_db
-DATABASE_USER=postgres
-DATABASE_PASSWORD=votre_mot_de_passe
+Le serveur démarre sur http://127.0.0.1:8000
+
+Documentation interactive : http://127.0.0.1:8000/docs
+
+## 📊 Structure des données
+
+### Tables principales
+
+Toutes les tables sont préfixées par `fake_` :
+
+- **fake_clients** : Clients (particuliers et entreprises)
+- **fake_client_addresses** : Adresses des clients (siège social, entrepôts, chantiers)
+- **fake_construction_sites** : Chantiers/ouvrages assurés
+- **fake_client_contracts** : Contrats d'assurance
+- **fake_contract_history** : Historique des modifications de contrats
+
+### Tables référentielles
+
+- **fake_ref_insurance_contract_types** : Types de contrats d'assurance
+- **fake_ref_guarantees** : Garanties disponibles
+- **fake_ref_contract_clauses** : Clauses contractuelles
+- **fake_ref_building_categories** : Catégories de bâtiments
+- **fake_ref_work_categories** : Catégories de travaux
+- **fake_ref_professions** : Professions
+- **fake_ref_franchise_grids** : Grilles de franchises
+- **fake_ref_exclusions** : Exclusions
+
+## 🔧 API Endpoints
+
+### Clients
+
+#### Liste des clients
+```bash
+GET /clients/
 ```
 
-4. **Initialiser la base de données**
+#### Détails d'un client
+```bash
+GET /clients/{client_id}
+```
 
-La base de données sera automatiquement initialisée au premier démarrage du serveur.
+#### Informations complètes d'un client
+```bash
+GET /clients/{client_id}/full
+```
 
-## 🏃 Lancer le serveur
+Retourne toutes les informations du client, incluant :
+- Informations client
+- Toutes les adresses (siège social, entrepôts, chantiers)
+- Tous les contrats avec leurs détails :
+  - Garanties sélectionnées
+  - Clauses spécifiques
+  - Chantier associé (si applicable)
+  - Historique des modifications
+- Statistiques globales :
+  - Nombre total d'adresses
+  - Nombre total de contrats
+  - Montant total assuré
+  - Prime annuelle totale
 
-### Mode développement (avec rechargement automatique)
+#### Recherche de clients (phonétique)
+```bash
+GET /clients/search?query=<terme>
+```
+
+Recherche par :
+- Numéro de client (exact)
+- Nom de famille (phonétique avec algorithme Soundex adapté au français)
+
+Exemples :
+```bash
+# Par numéro de client
+curl "http://127.0.0.1:8000/clients/search?query=CLI1751"
+
+# Par nom (recherche phonétique)
+curl "http://127.0.0.1:8000/clients/search?query=pottier"
+```
+
+### Contrats
+
+```bash
+GET /contracts/                    # Liste
+GET /contracts/{contract_id}       # Détails
+POST /contracts/                   # Créer
+PUT /contracts/{contract_id}       # Modifier
+DELETE /contracts/{contract_id}    # Supprimer
+```
+
+### Chantiers
+
+```bash
+GET /construction-sites/                         # Liste
+GET /construction-sites/{site_id}                # Détails
+GET /construction-sites/reference/{reference}    # Par référence
+POST /construction-sites/                        # Créer
+PUT /construction-sites/{site_id}                # Modifier
+DELETE /construction-sites/{site_id}             # Supprimer
+```
+
+### Référentiels
+
+Chaque table référentielle dispose des endpoints :
+```bash
+GET /<resource>/           # Liste
+GET /<resource>/{id}       # Détails
+POST /<resource>/          # Créer
+PUT /<resource>/{id}       # Modifier
+DELETE /<resource>/{id}    # Supprimer
+```
+
+Ressources disponibles :
+- `/contract-types/` : Types de contrats
+- `/guarantees/` : Garanties
+- `/clauses/` : Clauses
+- `/building-categories/` : Catégories de bâtiments
+- `/work-categories/` : Catégories de travaux
+- `/professions/` : Professions
+- `/franchise-grids/` : Grilles de franchises
+- `/exclusions/` : Exclusions
+
+## 🎲 Génération de données de test
+
+Le script `generate_client_data.py` permet de créer des données de test cohérentes en français.
+
+### Options
+
+```bash
+# Supprimer tous les clients et leurs relations
+python3 generate_client_data.py --clean
+
+# Créer des clients avec toutes leurs relations
+python3 generate_client_data.py --create --count <nombre>
+
+# Créer uniquement des particuliers
+python3 generate_client_data.py --create --count 5 --type particulier
+
+# Créer uniquement des entreprises
+python3 generate_client_data.py --create --count 3 --type entreprise
+
+# Créer un mélange (par défaut)
+python3 generate_client_data.py --create --count 10 --type mixte
+
+# Nettoyer et créer en une seule commande
+python3 generate_client_data.py --clean --create --count 5
+```
+
+**Option `--type`** :
+- `particulier` : Génère uniquement des clients particuliers (personnes physiques)
+- `entreprise` : Génère uniquement des clients professionnels (entreprises)
+- `mixte` : Génère un mélange aléatoire de particuliers et d'entreprises (défaut)
+
+### Données générées par client
+
+Pour chaque client créé, le script génère automatiquement :
+
+1. **Client** (particulier ou entreprise)
+   - Informations personnelles (nom, prénom, civilité, date de naissance)
+   - OU informations entreprise (raison sociale, forme juridique, SIRET/SIREN)
+   - Contact (email, téléphone, mobile)
+   - Profession aléatoire
+
+2. **Adresses** (1 à 3 par client)
+   - Siège social (obligatoire)
+   - 0-1 entrepôt
+   - 0-1 chantier
+   - Données françaises cohérentes (codes postaux, départements)
+
+3. **Chantier** (optionnel, 50% des clients)
+   - Référence unique
+   - Localisation complète
+   - Montants (coût construction, valeur projet)
+   - Dates (ouverture, fin prévue)
+   - Caractéristiques (surface, nombre d'étages, etc.)
+
+4. **Contrats** (1 à 4 par client)
+   - Type de contrat aléatoire
+   - Montants (assuré, prime annuelle, franchise)
+   - Dates (émission, effet, expiration)
+   - Statut (brouillon, actif, etc.)
+   - 2-5 garanties sélectionnées
+   - 1-3 clauses spécifiques
+   - Lié au chantier si disponible
+
+5. **Historique** (1 à 5 entrées par contrat)
+   - Actions (création, modification, renouvellement, etc.)
+   - Horodatage
+   - Utilisateur
+   - Commentaires
+
+### Exemples d'utilisation
+
+```bash
+# Créer 10 clients de test
+python3 generate_client_data.py --clean --create --count 10
+
+# Ajouter 5 clients supplémentaires
+python3 generate_client_data.py --create --count 5
+```
+
+### Sortie du script
+
+Le script affiche un résumé détaillé :
+
+```
+✅ Tous les clients et données associées ont été supprimés
+
+Création de 2 clients avec toutes leurs relations...
+
+✅ Client créé : CLI1751 - Françoise Pottier
+   📍 Adresses créées : 2
+   🏗️ Chantier créé : Projet boulevard Roland Costa
+   📄 Contrats créés : 2
+
+✅ Client créé : CLI3357 - Susan Fontaine
+   📍 Adresses créées : 2
+   🏗️ Chantier créé : Projet chemin de Dubois
+   📄 Contrats créés : 4
+
+📊 Résumé de la génération :
+   Clients créés      : 2
+   Adresses créées    : 4
+   Chantiers créés    : 2
+   Contrats créés     : 6
+   Historiques créés  : 15
+```
+
+### Données françaises cohérentes
+
+Le script utilise la librairie `Faker` avec la locale française (`fr_FR`) :
+- Noms et prénoms français
+- Adresses françaises réelles
+- Codes postaux valides (5 chiffres)
+- Départements calculés à partir du code postal
+- Numéros de téléphone au format français
+- SIRET/SIREN pour les entreprises
+- Professions françaises
+
+## 🔍 Exemples d'utilisation
+
+### Récupérer toutes les informations d'un client
+
+```bash
+curl http://127.0.0.1:8000/clients/11/full | python3 -m json.tool
+```
+
+Exemple de réponse :
+```json
+{
+    "client": {
+        "id": 11,
+        "client_number": "CLI1751",
+        "first_name": "Françoise",
+        "last_name": "Pottier",
+        "email": "epinto@example.net",
+        ...
+    },
+    "addresses": [
+        {
+            "address_type": "siege_social",
+            "address_line1": "62, rue de Denis",
+            "postal_code": "23468",
+            "city": "Dupréboeuf",
+            ...
+        }
+    ],
+    "contracts": [
+        {
+            "contract_number": "CNT573827",
+            "status": "brouillon",
+            "insured_amount": 5295845.0,
+            "construction_site": {...},
+            "selected_guarantees": [...],
+            "history": [...]
+        }
+    ],
+    "stats": {
+        "total_addresses": 2,
+        "total_contracts": 2,
+        "total_insured_amount": 11537011.0,
+        "total_annual_premium": 38298.56
+    }
+}
+```
+
+### Rechercher un client
+
+```bash
+# Par numéro
+curl "http://127.0.0.1:8000/clients/search?query=CLI3357" | python3 -m json.tool
+
+# Par nom (recherche phonétique)
+curl "http://127.0.0.1:8000/clients/search?query=fontaine" | python3 -m json.tool
+```
+
+## 📁 Structure du projet
+
+```
+sma_dwh/
+├── app/
+│   ├── __init__.py
+│   ├── database.py          # Configuration DB
+│   ├── models.py            # Modèles SQLAlchemy (15 tables)
+│   ├── schemas.py           # Schémas Pydantic
+│   ├── enums.py             # Énumérations
+│   └── routers/
+│       ├── clients.py       # Endpoints clients
+│       ├── contracts.py     # Endpoints contrats
+│       ├── sites.py         # Endpoints chantiers
+│       └── referentials.py  # Endpoints référentiels
+├── main.py                  # Point d'entrée
+├── generate_client_data.py  # Script de génération de données
+└── README.md               # Cette documentation
+```
+
+## 🔐 Caractéristiques techniques
+
+### Authentification et sécurité
+- Base de données PostgreSQL avec authentification
+- Validation des données avec Pydantic
+- Gestion des erreurs HTTP appropriée
+
+### Performance
+- ORM SQLAlchemy avec support des relations complexes
+- Chargement optimisé avec `joinedload` pour les relations
+- Index sur les champs de recherche fréquents
+
+### Qualité du code
+- Séparation des responsabilités (models, schemas, routers)
+- Documentation automatique OpenAPI/Swagger
+- Schémas de validation pour toutes les entrées/sorties
+- Gestion cohérente des types (Integer pour les IDs)
+
+## 🌐 Documentation API interactive
+
+Une fois le serveur démarré, accédez à :
+- **Swagger UI** : http://127.0.0.1:8000/docs
+- **ReDoc** : http://127.0.0.1:8000/redoc
+
+## ⚙️ Configuration
+
+### Base de données
+
+Modifier dans `app/database.py` :
+```python
+DATABASE_URL = "postgresql://user:password@host:port/database"
+```
+
+### Port du serveur
+
+Modifier dans `main.py` :
+```python
+uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+## 🧪 Tests
+
+### Vérifier l'état du serveur
+
+```bash
+curl http://127.0.0.1:8000/
+```
+
+### Lister tous les clients
+
+```bash
+curl http://127.0.0.1:8000/clients/ | python3 -m json.tool
+```
+
+### Tester la recherche phonétique
+
+```bash
+curl "http://127.0.0.1:8000/clients/search?query=martin" | python3 -m json.tool
+```
+
+## 📝 Notes
+
+- Tous les noms de tables sont préfixés par `fake_` pour identifier facilement les données de test
+- Les IDs sont de type Integer avec auto-incrémentation
+- La recherche phonétique utilise un algorithme Soundex adapté au français
+- Le script de génération crée des données cohérentes et réalistes
+- Les montants sont en euros (€)
+- Les dates sont au format ISO 8601
+
+## 🐛 Dépannage
+
+### Le serveur ne démarre pas
+Vérifier les dépendances :
+```bash
+pip install --upgrade fastapi uvicorn sqlalchemy psycopg2-binary
+```
+
+### Erreur de connexion à la base de données
+- Vérifier que PostgreSQL est accessible
+- Vérifier les credentials dans `app/database.py`
+- Tester la connexion avec `psql`
+
+### Erreurs lors de la génération de données
+- Vérifier que la base de données est accessible
+- S'assurer que les tables sont créées
+- Utiliser `--clean` pour repartir à zéro
+
+## 📚 Ressources
+
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
+- [Faker Documentation](https://faker.readthedocs.io/)
+
 ```bash
 python main.py
 ```

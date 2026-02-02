@@ -206,8 +206,6 @@ def get_client_full(client_id: int, db: Session = Depends(get_db)):
     client = db.query(ClientModel).options(
         joinedload(ClientModel.addresses),
         joinedload(ClientModel.contracts).joinedload(ClientContractModel.construction_site),
-        joinedload(ClientModel.contracts).joinedload(ClientContractModel.guarantees),
-        joinedload(ClientModel.contracts).joinedload(ClientContractModel.clauses),
         joinedload(ClientModel.contracts).joinedload(ClientContractModel.history)
     ).filter(ClientModel.id == client_id).first()
     
@@ -262,48 +260,47 @@ def get_client_full(client_id: int, db: Session = Depends(get_db)):
             {
                 "id": contract.id,
                 "contract_number": contract.contract_number,
-                "contract_type_id": contract.contract_type_id,
-                "subscription_date": contract.subscription_date,
-                "effective_date": contract.effective_date,
-                "expiration_date": contract.expiration_date,
-                "premium_amount": float(contract.premium_amount) if contract.premium_amount else None,
-                "payment_frequency": contract.payment_frequency,
+                "contract_type_code": contract.contract_type_code,
                 "status": contract.status,
+                "issue_date": contract.issue_date,
+                "effective_date": contract.effective_date,
+                "expiry_date": contract.expiry_date,
+                "cancellation_date": contract.cancellation_date,
+                "insured_amount": float(contract.insured_amount) if contract.insured_amount else None,
+                "annual_premium": float(contract.annual_premium) if contract.annual_premium else None,
+                "total_premium": float(contract.total_premium) if contract.total_premium else None,
+                "franchise_amount": float(contract.franchise_amount) if contract.franchise_amount else None,
+                "duration_years": contract.duration_years,
+                "is_renewable": contract.is_renewable,
                 "construction_site": {
                     "id": contract.construction_site.id,
                     "site_name": contract.construction_site.site_name,
-                    "site_address": contract.construction_site.site_address,
+                    "address_line1": contract.construction_site.address_line1,
+                    "address_line2": contract.construction_site.address_line2,
                     "postal_code": contract.construction_site.postal_code,
                     "city": contract.construction_site.city,
-                    "estimated_work_amount": float(contract.construction_site.estimated_work_amount) if contract.construction_site.estimated_work_amount else None
+                    "total_project_value": float(contract.construction_site.total_project_value) if contract.construction_site.total_project_value else None,
+                    "construction_cost": float(contract.construction_site.construction_cost) if contract.construction_site.construction_cost else None,
+                    "opening_date": contract.construction_site.opening_date,
+                    "planned_completion_date": contract.construction_site.planned_completion_date
                 } if contract.construction_site else None,
-                "guarantees": [
-                    {
-                        "id": guarantee.id,
-                        "guarantee_code": guarantee.guarantee_code,
-                        "guarantee_name": guarantee.guarantee_name,
-                        "description": guarantee.description
-                    }
-                    for guarantee in contract.guarantees
-                ],
-                "clauses": [
-                    {
-                        "id": clause.id,
-                        "clause_code": clause.clause_code,
-                        "clause_name": clause.clause_name,
-                        "description": clause.description
-                    }
-                    for clause in contract.clauses
-                ],
+                "selected_guarantees": contract.selected_guarantees or [],
+                "selected_clauses": contract.selected_clauses or [],
+                "specific_exclusions": contract.specific_exclusions or [],
+                "special_conditions": contract.special_conditions,
+                "broker_name": contract.broker_name,
+                "broker_code": contract.broker_code,
+                "underwriter": contract.underwriter,
                 "history": [
                     {
                         "id": hist.id,
-                        "action_type": hist.action_type,
-                        "action_date": hist.action_date,
-                        "old_status": hist.old_status,
-                        "new_status": hist.new_status,
-                        "comment": hist.comment,
-                        "created_by": hist.created_by
+                        "action": hist.action,
+                        "field_changed": hist.field_changed,
+                        "old_value": hist.old_value,
+                        "new_value": hist.new_value,
+                        "changed_by": hist.changed_by,
+                        "changed_at": hist.changed_at,
+                        "comment": hist.comment
                     }
                     for hist in contract.history
                 ]
@@ -314,7 +311,8 @@ def get_client_full(client_id: int, db: Session = Depends(get_db)):
             "total_addresses": len(client.addresses),
             "total_contracts": len(client.contracts),
             "active_contracts": len([c for c in client.contracts if c.status == "active"]),
-            "total_premium": sum(float(c.premium_amount) for c in client.contracts if c.premium_amount)
+            "total_insured_amount": sum(float(c.insured_amount) for c in client.contracts if c.insured_amount),
+            "total_annual_premium": sum(float(c.annual_premium) for c in client.contracts if c.annual_premium)
         }
     }
 
