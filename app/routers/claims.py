@@ -1,5 +1,7 @@
 """Routes API pour la gestion des sinistres construction"""
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -7,7 +9,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app import schemas
-from app.models import ClaimModel, ClientContractModel
+from app.models import ClaimModel, ClientContractModel, ClientModel
 
 router = APIRouter(prefix="/claims", tags=["Sinistres"])
 
@@ -33,18 +35,18 @@ def create_claim(claim: schemas.ClaimCreate, db: Session = Depends(get_db)):
     return db_claim
 
 
-@router.get("/", response_model=List[schemas.Claim])
-@router.get("", response_model=List[schemas.Claim])
+@router.get("/")
+@router.get("")
 def list_claims(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(20, ge=1, le=100),
     contract_id: Optional[int] = None,
     status: Optional[str] = None,
     claim_type: Optional[str] = None,
     severity: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Liste des sinistres avec filtres"""
+    """Liste des sinistres avec filtres et pagination"""
     query = db.query(ClaimModel)
     
     if contract_id:
@@ -59,28 +61,91 @@ def list_claims(
     if severity:
         query = query.filter(ClaimModel.severity == severity)
     
-    return query.order_by(ClaimModel.declaration_date.desc()).offset(skip).limit(limit).all()
+    total = query.count()
+    items = query.order_by(ClaimModel.declaration_date.desc()).offset(skip).limit(limit).all()
+    
+    # Enrichir avec les informations client
+    items_dict = []
+    for item in items:
+        claim_dict = jsonable_encoder(schemas.Claim.from_orm(item))
+        
+        # Récupérer le contrat et le client
+        contract = db.query(ClientContractModel).filter(ClientContractModel.id == item.contract_id).first()
+        if contract:
+            client = db.query(ClientModel).filter(ClientModel.id == contract.client_id).first()
+            if client:
+                # Ajouter les informations client
+                if client.client_type == 'professionnel':
+                    claim_dict['client_name'] = client.company_name
+                    claim_dict['client_company_name'] = client.company_name
+                else:
+                    claim_dict['client_name'] = f"{client.first_name or ''} {client.last_name or ''}".strip()
+                    claim_dict['client_first_name'] = client.first_name
+                    claim_dict['client_last_name'] = client.last_name
+        
+        items_dict.append(claim_dict)
+    
+    return JSONResponse(content={
+        "items": items_dict,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "page": (skip // limit) + 1,
+        "pages": (total + limit - 1) // limit
+    })
 
 
 @router.get("/search", response_model=List[schemas.Claim])
 def search_claims(
-    query: Optional[str] = Query(None, description="Numéro de sinistre, titre ou description"),
+    query: Optional[str] = Query(None, description="Numéro de sinistre, titre, N° contrat, N° client ou nom client"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db)
 ):
-    """Recherche de sinistres"""
+    """Recherche de sinistres par numéro, titre, contrat ou client"""
     if not query:
         raise HTTPException(status_code=400, detail="Le paramètre 'query' est requis")
     
     search_filter = f"%{query}%"
-    claims = db.query(ClaimModel).filter(
+    
+    # Recherche dans les sinistres avec jointure sur contrat et client
+    claims = db.query(ClaimModel).join(
+        ClientContractModel, ClaimModel.contract_id == ClientContractModel.id
+    ).join(
+        ClientModel, ClientContractModel.client_id == ClientModel.id
+    ).filter(
         (ClaimModel.claim_number.ilike(search_filter)) |
         (ClaimModel.title.ilike(search_filter)) |
-        (ClaimModel.description.ilike(search_filter))
+        (ClaimModel.description.ilike(search_filter)) |
+        (ClientContractModel.contract_number.ilike(search_filter)) |
+        (ClientModel.client_number.ilike(search_filter)) |
+        (ClientModel.first_name.ilike(search_filter)) |
+        (ClientModel.last_name.ilike(search_filter)) |
+        (ClientModel.company_name.ilike(search_filter))
     ).offset(skip).limit(limit).all()
     
-    return claims
+    # Enrichir avec les informations client
+    result = []
+    for claim in claims:
+        claim_dict = jsonable_encoder(schemas.Claim.from_orm(claim))
+        
+        # Récupérer le contrat et le client
+        contract = db.query(ClientContractModel).filter(ClientContractModel.id == claim.contract_id).first()
+        if contract:
+            client = db.query(ClientModel).filter(ClientModel.id == contract.client_id).first()
+            if client:
+                # Ajouter les informations client
+                if client.client_type == 'professionnel':
+                    claim_dict['client_name'] = client.company_name
+                    claim_dict['client_company_name'] = client.company_name
+                else:
+                    claim_dict['client_name'] = f"{client.first_name or ''} {client.last_name or ''}".strip()
+                    claim_dict['client_first_name'] = client.first_name
+                    claim_dict['client_last_name'] = client.last_name
+        
+        result.append(claim_dict)
+    
+    return JSONResponse(content=result)
 
 
 @router.get("/contract/{contract_id}", response_model=List[schemas.Claim])

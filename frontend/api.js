@@ -147,7 +147,11 @@ class API {
     }
 
     async getContract(contractNumber) {
-        return this.request(`/contracts/${contractNumber}`);
+        return this.request(`/contracts/number/${contractNumber}`);
+    }
+
+    async getContractById(contractId) {
+        return this.request(`/contracts/${contractId}`);
     }
 
     async createContract(contractData) {

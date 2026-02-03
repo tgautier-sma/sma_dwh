@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recherche de Sinistres - SMA DWH</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-secondary);
+        }
+        
+        .standalone-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .standalone-header {
+            background: var(--bg-primary);
+            padding: 16px 24px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .standalone-header h1 {
+            margin: 0 0 4px 0;
+            color: var(--primary-color);
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .standalone-header p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .search-section {
+            background: var(--bg-primary);
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .search-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .search-controls input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+        }
+        
+        .search-controls input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .detail-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .detail-card {
+            background: var(--bg-primary);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .detail-card h3, .detail-card h4 {
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+        
+        .detail-card h5 {
+            margin: 16px 0 8px 0;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .summary-card {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+        }
+        
+        .mini-map {
+            height: 250px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .address-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        
+        .address-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .address-info .info-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .address-info .info-row label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        
+        .address-info .info-row span {
+            color: var(--text-primary);
+        }
+        
+        .map-container {
+            position: relative;
+        }
+        
+        .map-expand-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-size: 14px;
+            color: var(--primary-color);
+            transition: all 0.2s;
+        }
+        
+        .map-expand-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .map-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            padding: 20px;
+        }
+        
+        .map-modal-content {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .map-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 10001;
+            background: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .map-modal-close:hover {
+            background: var(--danger-color);
+            color: white;
+        }
+        
+        #large-map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .btn-copy {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            padding: 4px 8px;
+            margin-left: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-copy:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .btn-copy:active {
+            transform: scale(0.95);
+        }
+        
+        h3 .btn-copy {
+            font-size: 16px;
+            vertical-align: middle;
+            margin-left: 12px;
+        }
+        
+        .btn-copy.btn-copy-inline {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            margin: 0;
+        }
+        
+        @media (max-width: 768px) {
+            .address-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="standalone-container">
+        <div class="standalone-header">
+            <h1>
+                <i class="fas fa-search"></i>
+                Synthèse Sinistres
+            </h1>
+            <p>Recherchez et consultez les dossiers sinistres par numéro de sinistre, contrat ou client.</p>
+        </div>
+        
+        <div class="search-section">
+            <div class="search-controls">
+                <input type="text" id="claim-search-input" placeholder="Rechercher par N° sinistre, N° contrat, N° client ou nom client..." onkeypress="if(event.key === 'Enter') searchClaims()">
+                <button class="btn btn-primary" onclick="searchClaims()">
+                    <i class="fas fa-search"></i> Rechercher
+                </button>
+                <button class="btn btn-secondary" onclick="clearSearch()">
+                    <i class="fas fa-times"></i> Effacer
+                </button>
+            </div>
+        </div>
+        
+        <div id="search-results"></div>
+        
+        <div id="loading-spinner" style="display: none; text-align: center; padding: 40px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: var(--primary-color);"></i>
+            <p style="margin-top: 16px; color: var(--text-secondary);">Chargement du dossier sinistre...</p>
+        </div>
+        
+        <div id="claim-detail" style="display: none;">
+            <button class="btn btn-secondary" onclick="backToResults()" style="margin-bottom: 20px;">
+                <i class="fas fa-arrow-left"></i> Retour aux résultats
+            </button>
+            
+            <div class="detail-columns">
+                <div class="detail-card" id="claim-info"></div>
+                
+                <div>
+                    <div class="summary-card" id="client-info"></div>
+                    <div class="summary-card" id="contract-info"></div>
+                    <div class="summary-card" id="guarantees-info"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modale pour la carte agrandie -->
+    <div id="map-modal" class="map-modal">
+        <div class="map-modal-content">
+            <button class="map-modal-close" onclick="closeMapModal()">
+                <i class="fas fa-times"></i> Fermer
+            </button>
+            <div id="large-map"></div>
+        </div>
+    </div>
+    
+    <script src="api.js"></script>
+    <script>
+        // L'objet api est déjà déclaré dans api.js
+        
+        let searchResults = [];
+        let currentPage = 1;
+        let totalPages = 1;
+        let pageSize = 20;
+        let isSearchMode = false;
+        let guaranteesReferential = {}; // Référentiel des garanties chargé au démarrage
+        let currentSiteData = null; // Données du chantier pour la carte
+        
+        // Charger le référentiel des garanties depuis l'API
+        async function loadGuaranteesReferential() {
+            try {
+                const response = await fetch('/referentials/guarantees');
+                const guarantees = await response.json();
+                guarantees.forEach(g => {
+                    guaranteesReferential[g.code] = g.name;
+                });
+            } catch (error) {
+                console.error('Erreur chargement référentiel garanties:', error);
+            }
+        }
+        
+        // Charger la liste paginée au démarrage
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadGuaranteesReferential();
+            loadClaimsList(1);
+            document.getElementById('claim-search-input').focus();
+        });
+        
+        async function loadClaimsList(page = 1) {
+            try {
+                const skip = (page - 1) * pageSize;
+                const response = await fetch(`/claims?skip=${skip}&limit=${pageSize}`);
+                if (!response.ok) {
+                    throw new Error('Erreur lors du chargement');
+                }
+                
+                const data = await response.json();
+                searchResults = data.items;
+                currentPage = data.page;
+                totalPages = data.pages;
+                isSearchMode = false;
+                displayResults();
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('Erreur lors du chargement: ' + error.message);
+            }
+        }
+        
+        async function searchClaims() {
+            const input = document.getElementById('claim-search-input');
+            const query = input.value.trim();
+            
+            if (!query) {
+                // Si pas de recherche, afficher la liste paginée
+                loadClaimsList(1);
+                return;
+            }
+            
+            try {
+                // Utiliser l'endpoint de recherche qui cherche dans sinistre, contrat et client
+                const response = await fetch(`/claims/search?query=${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    throw new Error('Erreur lors de la recherche');
+                }
+                
+                searchResults = await response.json();
+                isSearchMode = true;
+                displayResults();
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('Erreur lors de la recherche: ' + error.message);
+            }
+        }
+        
+        function displayResults() {
+            const container = document.getElementById('search-results');
+            
+            if (searchResults.length === 0) {
+                container.innerHTML = '<div class="detail-card"><p class="help-text">Aucun sinistre trouvé</p></div>';
+                return;
+            }
+            
+            const paginationHtml = !isSearchMode && totalPages > 1 ? `
+                <div class="pagination">
+                    <button class="btn btn-secondary btn-sm" onclick="loadClaimsList(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left"></i> Précédent
+                    </button>
+                    <span class="pagination-info">Page ${currentPage} / ${totalPages}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="loadClaimsList(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>
+                        Suivant <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            ` : '';
+            
+            const html = `
+                <div class="detail-card">
+                    <h3>${isSearchMode ? searchResults.length : 'Tous les'} sinistre${searchResults.length > 1 ? 's' : ''}${isSearchMode ? ' trouvé' + (searchResults.length > 1 ? 's' : '') : ''}</h3>
+                    <div class="data-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Numéro</th>
+                                    <th>Titre</th>
+                                    <th>Client</th>
+                                    <th>Type</th>
+                                    <th>Statut</th>
+                                    <th>Date déclaration</th>
+                                    <th>Montant réclamé</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${searchResults.map(claim => {
+                                    const clientName = claim.client_name || 
+                                        (claim.client_company_name) || 
+                                        (claim.client_first_name && claim.client_last_name ? `${claim.client_first_name} ${claim.client_last_name}` : '-');
+                                    return `
+                                    <tr>
+                                        <td>
+                                            <strong>${claim.claim_number}</strong>
+                                            <button class="btn-copy" onclick="copyToClipboard('${claim.claim_number}', this); event.stopPropagation();" title="Copier le numéro">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </td>
+                                        <td>${claim.title}</td>
+                                        <td>${clientName}</td>
+                                        <td><span class="badge badge-info">${claim.claim_type}</span></td>
+                                        <td><span class="badge badge-${getStatusBadge(claim.status)}">${claim.status}</span></td>
+                                        <td>${formatDate(claim.declaration_date)}</td>
+                                        <td>${formatCurrency(claim.estimated_amount || 0)}</td>
+                                        <td>
+                                            <button class="btn btn-primary btn-sm" onclick="viewClaim('${claim.claim_number}')">
+                                                <i class="fas fa-eye"></i> Voir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `}).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ${paginationHtml}
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        async function viewClaim(claimNumber) {
+            try {
+                // Afficher le spinner
+                document.getElementById('search-results').style.display = 'none';
+                document.getElementById('claim-detail').style.display = 'none';
+                document.getElementById('loading-spinner').style.display = 'block';
+                
+                const claim = await api.getClaim(claimNumber);
+                
+                // Charger le contrat par ID avec ses détails (incluant construction_site et guarantees)
+                const contractData = await api.getContractById(claim.contract_id);
+                
+                // Charger aussi le contrat complet par numéro pour avoir les garanties
+                const contract = await api.getContract(contractData.contract_number);
+                
+                if (!contract) {
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('search-results').style.display = 'block';
+                    alert('Contrat non trouvé');
+                    return;
+                }
+                
+                const client = await api.getClient(contract.client_id);
+                
+                // Masquer le spinner et afficher les détails
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('claim-detail').style.display = 'block';
+                
+                displayClaimInfo(claim);
+                displayClientInfo(client);
+                displayContractInfo(contract);
+                displayGuarantees(contract);
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('search-results').style.display = 'block';
+                alert('Erreur lors du chargement du détail');
+            }
+        }
+        
+        function displayClaimInfo(claim) {
+            const html = `
+                <h3>
+                    <i class="fas fa-exclamation-triangle"></i> Sinistre ${claim.claim_number}
+                    <button class="btn-copy" onclick="copyToClipboard('${claim.claim_number}', this)" title="Copier le numéro de sinistre">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </h3>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <label>Titre</label>
+                        <span><strong>${claim.title}</strong></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Type</label>
+                        <span><span class="badge badge-info">${claim.claim_type}</span></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Statut</label>
+                        <span><span class="badge badge-${getStatusBadge(claim.status)}">${claim.status}</span></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Gravité</label>
+                        <span><span class="badge badge-${getSeverityBadge(claim.severity)}">${claim.severity}</span></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Date de déclaration</label>
+                        <span>${formatDate(claim.declaration_date)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Date du sinistre</label>
+                        <span>${formatDate(claim.incident_date)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Montant estimé</label>
+                        <span><strong>${formatCurrency(claim.estimated_amount)}</strong></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Montant expert</label>
+                        <span>${formatCurrency(claim.expert_amount)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Franchise</label>
+                        <span>${formatCurrency(claim.franchise_applied)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Indemnité</label>
+                        <span>${formatCurrency(claim.indemnity_amount)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Réserve</label>
+                        <span>${formatCurrency(claim.reserve_amount)}</span>
+                    </div>
+                </div>
+                ${claim.description ? `
+                    <div style="margin-top: 20px;">
+                        <h4>Description</h4>
+                        <p style="color: var(--text-secondary);">${claim.description}</p>
+                    </div>
+                ` : ''}
+            `;
+            document.getElementById('claim-info').innerHTML = html;
+        }
+        
+        function displayClientInfo(client) {
+            const clientName = client.client_type === 'professionnel' 
+                ? client.company_name 
+                : `${client.first_name || ''} ${client.last_name || ''}`.trim();
+            
+            const html = `
+                <h4><i class="fas fa-user"></i> Client</h4>
+                <div class="detail-grid">
+                    <div class="detail-item" style="position: relative;">
+                        <label>Numéro</label>
+                        <span><strong>${client.client_number}</strong></span>
+                        <button class="btn-copy btn-copy-inline" onclick="copyToClipboard('${client.client_number}', this)" title="Copier le numéro de client">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <div class="detail-item">
+                        <label>Nom</label>
+                        <span>${clientName}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Email</label>
+                        <span>${client.email || '-'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Téléphone</label>
+                        <span>${client.phone || '-'}</span>
+                    </div>
+                </div>
+            `;
+            document.getElementById('client-info').innerHTML = html;
+        }
+        
+        function displayContractInfo(contract) {
+            let siteHtml = '';
+            if (contract.construction_site) {
+                const site = contract.construction_site;
+                // Utiliser 'address' ou 'address_line1' selon ce qui est disponible
+                const address = site.address || site.address_line1 || '';
+                const fullAddress = `${address} ${site.postal_code || ''} ${site.city || ''}`.trim();
+                const mapId = 'map-' + Date.now();
+                const coordsId = 'coords-' + Date.now();
+                
+                siteHtml = `
+                    <h5><i class="fas fa-hard-hat"></i> Chantier</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <label>Référence</label>
+                            <span>${site.site_reference || site.site_code || '-'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Nom</label>
+                            <span>${site.site_name || '-'}</span>
+                        </div>
+                        <div class="detail-item" style="grid-column: 1 / -1;">
+                            <label>Description</label>
+                            <span>${site.description || '-'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Catégorie bâtiment</label>
+                            <span>${site.building_category || '-'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Type de travaux</label>
+                            <span>${site.work_category || '-'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Budget estimé</label>
+                            <span>${formatCurrency(site.estimated_budget)}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Coût réel</label>
+                            <span>${formatCurrency(site.actual_cost)}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Date début</label>
+                            <span>${formatDate(site.start_date)}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Date fin prévue</label>
+                            <span>${formatDate(site.planned_end_date)}</span>
+                        </div>
+                    </div>
+                    
+                    <h5 style="margin-top: 20px;"><i class="fas fa-map-marker-alt"></i> Localisation</h5>
+                    <div class="address-section">
+                        <div class="address-info">
+                            <div class="info-row">
+                                <label>Adresse complète</label>
+                                <span>
+                                    ${address || '-'}${site.address_line2 ? '<br>' + site.address_line2 : ''}<br>
+                                    ${site.postal_code || ''} ${site.city || ''}${site.country ? '<br>' + site.country : ''}
+                                </span>
+                            </div>
+                            <div class="info-row">
+                                <label>Coordonnées GPS</label>
+                                <span id="${coordsId}" style="color: var(--text-secondary); font-style: italic;">Chargement...</span>
+                            </div>
+                        </div>
+                        <div class="map-container">
+                            <button class="map-expand-btn" onclick="expandMap()" title="Agrandir la carte">
+                                <i class="fas fa-expand"></i> Agrandir
+                            </button>
+                            <div id="${mapId}" class="mini-map"></div>
+                        </div>
+                    </div>
+                `;
+                
+                // Stocker les données du site pour la carte agrandie
+                currentSiteData = {
+                    mapId: mapId,
+                    address: fullAddress,
+                    site: site,
+                    coordsId: coordsId
+                };
+                
+                // Initialiser la carte après un court délai pour que le DOM soit prêt
+                setTimeout(() => {
+                    initializeMap(mapId, fullAddress, site, coordsId);
+                }, 100);
+            }
+            
+            const html = `
+                <h4><i class="fas fa-file-contract"></i> Contrat</h4>
+                <div class="detail-grid">
+                    <div class="detail-item" style="position: relative;">
+                        <label>Numéro</label>
+                        <span><strong>${contract.contract_number}</strong></span>
+                        <button class="btn-copy btn-copy-inline" onclick="copyToClipboard('${contract.contract_number}', this)" title="Copier le numéro de contrat">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <div class="detail-item">
+                        <label>Type</label>
+                        <span><span class="badge badge-info">${contract.contract_type_code}</span></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Date d'effet</label>
+                        <span>${formatDate(contract.effective_date)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Montant assuré</label>
+                        <span>${formatCurrency(contract.insured_amount)}</span>
+                    </div>
+                </div>
+                ${siteHtml}
+            `;
+            document.getElementById('contract-info').innerHTML = html;
+        }
+        
+        function displayGuarantees(contract) {
+            const guarantees = contract.guarantees || [];
+            const html = `
+                <h4><i class="fas fa-shield-alt"></i> Garanties (${guarantees.length})</h4>
+                ${guarantees.length > 0 ? `
+                    <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                        <table class="data-table" style="min-width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Garantie</th>
+                                    <th>Plafond</th>
+                                    <th>Franchise</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${guarantees.map(g => {
+                                    const code = g.code || g.guarantee_code;
+                                    const name = g.name || code; // Utiliser le nom depuis l'API
+                                    return `
+                                    <tr>
+                                        <td>
+                                            ${name} 
+                                            <span style="font-size: 0.85em; color: var(--text-secondary);">(${code})</span>
+                                        </td>
+                                        <td>${formatCurrency(g.ceiling || g.custom_ceiling)}</td>
+                                        <td>${formatCurrency(g.franchise || g.custom_franchise)}</td>
+                                    </tr>
+                                `}).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : '<p class="help-text">Aucune garantie</p>'}
+            `;
+            document.getElementById('guarantees-info').innerHTML = html;
+        }
+        
+        function backToResults() {
+            document.getElementById('search-results').style.display = 'block';
+            document.getElementById('claim-detail').style.display = 'none';
+        }
+        
+        function clearSearch() {
+            document.getElementById('claim-search-input').value = '';
+            document.getElementById('claim-detail').style.display = 'none';
+            loadClaimsList(1);
+        }
+        
+        // Initialiser la carte OpenStreetMap pour le chantier
+        async function initializeMap(mapId, address, site, coordsId) {
+            const mapElement = document.getElementById(mapId);
+            const coordsElement = document.getElementById(coordsId);
+            
+            // Vérifier que les éléments existent
+            if (!mapElement || !coordsElement) {
+                console.warn('Éléments de carte non trouvés:', mapId, coordsId);
+                return;
+            }
+            
+            // Éviter de créer plusieurs cartes sur le même élément
+            if (mapElement._leaflet_id) {
+                console.warn('Carte déjà initialisée sur:', mapId);
+                return;
+            }
+            
+            try {
+                // Essayer d'abord avec l'adresse complète
+                let query = encodeURIComponent(address);
+                let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                    signal: AbortSignal.timeout(5000) // Timeout de 5 secondes
+                });
+                let data = await response.json();
+                
+                // Vérifier que l'élément existe toujours
+                if (!document.getElementById(mapId)) return;
+                
+                // Si pas de résultat, essayer avec ville + code postal
+                if (!data || data.length === 0) {
+                    const fallbackAddress = `${site.postal_code || ''} ${site.city || ''}`.trim();
+                    if (fallbackAddress) {
+                        query = encodeURIComponent(fallbackAddress);
+                        response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                            signal: AbortSignal.timeout(5000)
+                        });
+                        data = await response.json();
+                    }
+                }
+                
+                // Vérifier encore que l'élément existe
+                if (!document.getElementById(mapId)) return;
+                
+                // Si toujours pas de résultat, essayer juste la ville
+                if (!data || data.length === 0) {
+                    const cityOnly = site.city || '';
+                    if (cityOnly) {
+                        query = encodeURIComponent(cityOnly + ', France');
+                        response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                            signal: AbortSignal.timeout(5000)
+                        });
+                        data = await response.json();
+                    }
+                }
+                
+                // Dernière vérification
+                if (!document.getElementById(mapId)) return;
+                
+                if (data && data.length > 0) {
+                    const lat = parseFloat(data[0].lat);
+                    const lon = parseFloat(data[0].lon);
+                    const isApproximate = !data[0].display_name.includes(site.postal_code || '');
+                    
+                    // Afficher les coordonnées GPS
+                    if (coordsElement && document.getElementById(coordsId)) {
+                        coordsElement.innerHTML = `
+                            <i class="fas fa-map-marker-alt" style="margin-right: 6px; color: var(--primary-color);"></i>
+                            <strong>Latitude:</strong> ${lat.toFixed(6)}° | 
+                            <strong>Longitude:</strong> ${lon.toFixed(6)}°
+                            ${isApproximate ? '<br><small style="color: var(--warning-color);"><i class="fas fa-info-circle"></i> Position approximative (centre ville)</small>' : ''}
+                            <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="margin-left: 10px; color: var(--primary-color);">
+                                <i class="fas fa-external-link-alt"></i> Voir sur Google Maps
+                            </a>
+                        `;
+                        coordsElement.style.fontStyle = 'normal';
+                    }
+                    
+                    // Vérifier une dernière fois avant de créer la carte
+                    if (!document.getElementById(mapId)) return;
+                    
+                    // Créer la carte
+                    const map = L.map(mapId).setView([lat, lon], isApproximate ? 13 : 15);
+                    
+                    // Ajouter les tuiles OpenStreetMap
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                        maxZoom: 19
+                    }).addTo(map);
+                    
+                    // Ajouter un marqueur
+                    const addressDisplay = site.address || site.address_line1 || '';
+                    const markerContent = `
+                        <b>${site.site_name || 'Chantier'}</b><br>
+                        ${addressDisplay}<br>
+                        ${site.postal_code || ''} ${site.city || ''}<br>
+                        <small><i class="fas fa-crosshairs"></i> ${lat.toFixed(6)}°, ${lon.toFixed(6)}°</small>
+                        ${isApproximate ? '<br><small style="color: #f59e0b;"><i class="fas fa-info-circle"></i> Position approximative</small>' : ''}
+                    `;
+                    L.marker([lat, lon]).addTo(map)
+                        .bindPopup(markerContent)
+                        .openPopup();
+                } else {
+                    // Pas de résultat de géocodage
+                    if (coordsElement && document.getElementById(coordsId)) {
+                        coordsElement.innerHTML = '<i class="fas fa-exclamation-circle" style="margin-right: 6px;"></i> Adresse non localisée';
+                    }
+                    if (mapElement && document.getElementById(mapId)) {
+                        mapElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);"><i class="fas fa-map-marked-alt" style="margin-right:8px;"></i> Impossible de localiser l\'adresse</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'initialisation de la carte:', error);
+                const currentCoords = document.getElementById(coordsId);
+                const currentMap = document.getElementById(mapId);
+                
+                if (currentCoords) {
+                    currentCoords.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i> Erreur de géolocalisation';
+                }
+                if (currentMap) {
+                    currentMap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);"><i class="fas fa-exclamation-triangle" style="margin-right:8px;"></i> Erreur de chargement de la carte</div>';
+                }
+            }
+        }
+        
+        // Fonction pour agrandir la carte dans une modale
+        let largeMapInstance = null;
+        async function expandMap() {
+            if (!currentSiteData) {
+                console.error('Aucune donnée de site disponible');
+                return;
+            }
+            
+            const { address, site } = currentSiteData;
+            const modal = document.getElementById('map-modal');
+            const largeMapElement = document.getElementById('large-map');
+            
+            // Afficher la modale
+            modal.style.display = 'block';
+            
+            // Attendre un peu pour que le DOM soit prêt
+            setTimeout(async () => {
+                try {
+                    // Essayer d'abord avec l'adresse complète
+                    let query = encodeURIComponent(address);
+                    let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    let data = await response.json();
+                    
+                    // Si pas de résultat, essayer avec ville + code postal
+                    if (!data || data.length === 0) {
+                        const fallbackAddress = `${site.postal_code || ''} ${site.city || ''}`.trim();
+                        if (fallbackAddress) {
+                            query = encodeURIComponent(fallbackAddress);
+                            response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                                signal: AbortSignal.timeout(5000)
+                            });
+                            data = await response.json();
+                        }
+                    }
+                    
+                    // Si toujours pas de résultat, essayer juste la ville
+                    if (!data || data.length === 0) {
+                        const cityOnly = site.city || '';
+                        if (cityOnly) {
+                            query = encodeURIComponent(cityOnly + ', France');
+                            response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                                signal: AbortSignal.timeout(5000)
+                            });
+                            data = await response.json();
+                        }
+                    }
+                    
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lon = parseFloat(data[0].lon);
+                        const isApproximate = !data[0].display_name.includes(site.postal_code || '');
+                        
+                        // Créer une nouvelle carte dans la modale
+                        if (largeMapInstance) {
+                            largeMapInstance.remove();
+                        }
+                        
+                        largeMapInstance = L.map('large-map').setView([lat, lon], isApproximate ? 13 : 16);
+                        
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                            maxZoom: 19
+                        }).addTo(largeMapInstance);
+                        
+                        const addressDisplay = site.address || site.address_line1 || '';
+                        const markerContent = `
+                            <b>${site.site_name || 'Chantier'}</b><br>
+                            ${addressDisplay}<br>
+                            ${site.postal_code || ''} ${site.city || ''}<br>
+                            <small><i class="fas fa-crosshairs"></i> ${lat.toFixed(6)}°, ${lon.toFixed(6)}°</small>
+                            ${isApproximate ? '<br><small style="color: #f59e0b;"><i class="fas fa-info-circle"></i> Position approximative</small>' : ''}
+                        `;
+                        
+                        L.marker([lat, lon]).addTo(largeMapInstance)
+                            .bindPopup(markerContent)
+                            .openPopup();
+                        
+                        // Forcer le redimensionnement de la carte
+                        setTimeout(() => {
+                            largeMapInstance.invalidateSize();
+                        }, 100);
+                    } else {
+                        // Pas de résultat de géocodage
+                        largeMapElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:white;"><i class="fas fa-map-marked-alt" style="margin-right:8px;"></i> Impossible de localiser l\'adresse</div>';
+                    }
+                } catch (error) {
+                    console.error('Erreur lors de l\'agrandissement de la carte:', error);
+                    largeMapElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:white;"><i class="fas fa-exclamation-triangle" style="margin-right:8px;"></i> Erreur de chargement de la carte</div>';
+                }
+            }, 100);
+        }
+        
+        // Fonction pour fermer la modale
+        function closeMapModal() {
+            const modal = document.getElementById('map-modal');
+            modal.style.display = 'none';
+            
+            // Nettoyer l'instance de la carte
+            if (largeMapInstance) {
+                largeMapInstance.remove();
+                largeMapInstance = null;
+            }
+        }
+        
+        // Fermer la modale en cliquant en dehors
+        window.onclick = function(event) {
+            const modal = document.getElementById('map-modal');
+            if (event.target === modal) {
+                closeMapModal();
+            }
+        }
+        
+        // Fonction pour copier dans le presse-papier
+        function copyToClipboard(text, buttonElement) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Animation de succès
+                const icon = buttonElement.querySelector('i');
+                const originalClass = icon.className;
+                icon.className = 'fas fa-check';
+                buttonElement.style.color = 'var(--success-color)';
+                
+                // Retour à l'état normal après 2 secondes
+                setTimeout(() => {
+                    icon.className = originalClass;
+                    buttonElement.style.color = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Erreur lors de la copie:', err);
+                alert('Erreur lors de la copie dans le presse-papier');
+            });
+        }
+        
+        // Helper functions
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('fr-FR');
+        }
+        
+        function formatCurrency(amount) {
+            if (amount === null || amount === undefined) return '-';
+            return new Intl.NumberFormat('fr-FR', {
+                style: 'currency',
+                currency: 'EUR'
+            }).format(amount);
+        }
+        
+        function getStatusBadge(status) {
+            const badges = {
+                'declare': 'warning',
+                'pris_en_compte': 'info',
+                'en_cours_expertise': 'info',
+                'attente_pieces': 'warning',
+                'accepte': 'success',
+                'refuse': 'danger',
+                'cloture': 'secondary'
+            };
+            return badges[status] || 'secondary';
+        }
+        
+        function getSeverityBadge(severity) {
+            const badges = {
+                'faible': 'success',
+                'moyen': 'warning',
+                'eleve': 'danger',
+                'critique': 'danger'
+            };
+            return badges[severity] || 'secondary';
+        }
+        
+        function getGuaranteeName(code) {
+            return guaranteesReferential[code] || code;
+        }
+        
+        // Focus on search input on load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadGuaranteesReferential();
+            document.getElementById('claim-search-input').focus();
+        });
+    </script>
+</body>
+</html>

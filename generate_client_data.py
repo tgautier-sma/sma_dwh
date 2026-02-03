@@ -16,7 +16,8 @@ from faker import Faker
 from app.database import SessionLocal, engine
 from app.models import (
     Base, ClientModel, ClientAddressModel, ConstructionSiteModel,
-    ClientContractModel, ContractHistoryModel
+    ClientContractModel, ContractHistoryModel, ClaimModel, contract_guarantees,
+    GuaranteeModel
 )
 
 # Initialiser Faker en français
@@ -184,18 +185,31 @@ def clean_all_clients(db: Session):
     print("\n🗑️  Suppression de tous les clients et leurs relations...")
     
     # Supprimer dans l'ordre inverse des dépendances
+    # 1. Sinistres (référencent contrats et chantiers)
+    deleted_claims = db.query(ClaimModel).delete()
+    print(f"  ✓ {deleted_claims} sinistres supprimés")
+    
+    # 2. Garanties de contrats (table d'association)
+    result = db.execute(contract_guarantees.delete())
+    print(f"  ✓ {result.rowcount} garanties de contrats supprimées")
+    
+    # 3. Historique contrats
     deleted_history = db.query(ContractHistoryModel).delete()
     print(f"  ✓ {deleted_history} historiques de contrats supprimés")
     
+    # 4. Contrats
     deleted_contracts = db.query(ClientContractModel).delete()
     print(f"  ✓ {deleted_contracts} contrats supprimés")
     
+    # 5. Chantiers
     deleted_sites = db.query(ConstructionSiteModel).delete()
     print(f"  ✓ {deleted_sites} chantiers supprimés")
     
+    # 6. Adresses
     deleted_addresses = db.query(ClientAddressModel).delete()
     print(f"  ✓ {deleted_addresses} adresses supprimées")
     
+    # 7. Clients
     deleted_clients = db.query(ClientModel).delete()
     print(f"  ✓ {deleted_clients} clients supprimés")
     
@@ -336,20 +350,26 @@ def generate_construction_site(db: Session, client: ClientModel) -> Construction
     construction_cost = random.randint(100000, 5000000)
     land_value = random.randint(50000, 1000000) if random.random() > 0.3 else 0
     
-    # Générer le code postal et les coordonnées GPS
-    postal_code = fake.postcode()
+    # Générer des coordonnées GPS cohérentes avec une vraie localisation en France
+    # local_latlng retourne (latitude, longitude, place_name, country_code, timezone)
+    location = fake.local_latlng(country_code='FR')
+    latitude = float(location[0])
+    longitude = float(location[1])
+    city = location[2]  # Utiliser le vrai nom de ville
     
-    # Note: ConstructionSiteModel n'a pas de champs GPS dans le modèle actuel
-    # Si vous voulez ajouter GPS aux chantiers, il faudra modifier le modèle
+    # Générer le code postal français (5 chiffres)
+    postal_code = f"{random.randint(1, 95):02d}{random.randint(0, 999):03d}"
     
     site = ConstructionSiteModel(
         site_reference=f"SITE{random.randint(10000, 99999)}",
         site_name=f"Projet {fake.street_name()}",
         address_line1=fake.street_address(),
-        postal_code=fake.postcode(),
-        city=fake.city(),
-        department=fake.postcode()[:2],  # Code département (2 chiffres)
+        postal_code=postal_code,
+        city=city,
+        department=postal_code[:2],  # Code département (2 premiers chiffres)
         region=fake.region(),
+        latitude=latitude,
+        longitude=longitude,
         building_category_code=building_category,
         work_category_code=work_category,
         total_surface_m2=random.randint(50, 2000),
@@ -386,6 +406,9 @@ def generate_construction_site(db: Session, client: ClientModel) -> Construction
 
 def generate_contract(db: Session, client: ClientModel, site: ConstructionSiteModel = None) -> ClientContractModel:
     """Générer un contrat d'assurance"""
+    if site is None:
+        raise ValueError("Un contrat doit obligatoirement être rattaché à un chantier")
+    
     contract_type = random.choice(CONTRACT_TYPES)
     status = random.choice(["actif", "en_attente", "brouillon"])
     
@@ -410,7 +433,7 @@ def generate_contract(db: Session, client: ClientModel, site: ConstructionSiteMo
         external_reference=f"EXT{random.randint(10000, 99999)}",
         contract_type_code=contract_type,
         client_id=client.id,
-        construction_site_id=site.id if site else None,
+        construction_site_id=site.id,  # Obligatoire - chaque contrat doit avoir un chantier
         status=status,
         issue_date=issue_date,
         effective_date=effective_date,
@@ -421,16 +444,7 @@ def generate_contract(db: Session, client: ClientModel, site: ConstructionSiteMo
         franchise_amount=random.randint(500, 10000),
         duration_years=duration_years,
         is_renewable=random.choice([True, False]),
-        selected_guarantees=[
-            {
-                "code": f"GAR_{contract_type}_{i:02d}",
-                "name": f"Garantie {fake.word()}",
-                "ceiling": random.randint(50000, 1000000),
-                "franchise": random.randint(500, 5000),
-                "included": True
-            }
-            for i in range(random.randint(2, 5))
-        ],
+        selected_guarantees=None,  # Désormais dans une table séparée
         selected_clauses=[
             {
                 "code": f"CL_{i:03d}",
@@ -449,6 +463,33 @@ def generate_contract(db: Session, client: ClientModel, site: ConstructionSiteMo
     )
     
     db.add(contract)
+    db.flush()  # Obtenir l'ID du contrat avant de créer les garanties
+    
+    # Récupérer les garanties disponibles dans le référentiel
+    available_guarantees = db.query(GuaranteeModel).all()
+    
+    if not available_guarantees:
+        print("⚠️  Aucune garantie trouvée dans le référentiel. Les garanties ne seront pas créées.")
+    else:
+        # Créer les garanties associées (minimum 1, jusqu'à 5 garanties par contrat)
+        # IMPORTANT: Chaque contrat doit avoir au moins 1 garantie
+        num_guarantees = min(random.randint(1, 5), len(available_guarantees))
+        selected_guarantees = random.sample(available_guarantees, num_guarantees)
+        
+        guarantees_data = []
+        for guarantee in selected_guarantees:
+            guarantees_data.append({
+                'contract_id': contract.id,
+                'guarantee_code': guarantee.code,
+                'custom_ceiling': guarantee.default_ceiling or random.randint(50000, 1000000),
+                'custom_franchise': guarantee.default_franchise or random.randint(500, 5000),
+                'is_included': True,
+                'annual_premium': random.uniform(500, 5000)
+            })
+        
+        if guarantees_data:
+            db.execute(contract_guarantees.insert(), guarantees_data)
+    
     db.commit()
     db.refresh(contract)
     
@@ -510,11 +551,14 @@ def create_complete_client(db: Session, verbose: bool = False, client_type: str 
         print(f"  ✓ {len(sites)} chantier(s) créé(s)")
     
     # 4. Créer des contrats (1 à 4)
+    # IMPORTANT: Chaque contrat doit avoir un chantier rattaché
     num_contracts = random.randint(1, 4)
     contracts = []
+    
+    # Créer tous les contrats en associant obligatoirement un chantier
     for i in range(num_contracts):
-        # Associer aléatoirement un chantier au contrat
-        site = random.choice(sites) if sites and random.random() > 0.3 else None
+        # Associer obligatoirement un chantier au contrat (plusieurs contrats peuvent partager le même chantier)
+        site = random.choice(sites)
         contract = generate_contract(db, client, site)
         contracts.append(contract)
         

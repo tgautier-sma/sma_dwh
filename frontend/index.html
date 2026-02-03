@@ -9,6 +9,8 @@
     <title>Gestion Assurance Construction - SMA DWH</title>
     <link rel="stylesheet" href="/static/styles.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -16,7 +18,7 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1><i class="fas fa-building"></i> SMA DWH</h1>
-                <p class="subtitle">Gestion Assurance Construction</p>
+                <p class="subtitle">Assurance Construction - Démo</p>
             </div>
             
             <nav class="sidebar-nav">
@@ -47,6 +49,11 @@
                 <a href="#" class="nav-item" data-view="history">
                     <i class="fas fa-history"></i>
                     <span>Historique</span>
+</a>
+                <a href="/static/claim_search.html" class="nav-item" target="_blank">
+                    <i class="fas fa-search"></i>
+                    <span>Recherche sinistres</span>
+                    <i class="fas fa-external-link-alt" style="margin-left: auto; font-size: 0.8em; opacity: 0.6;"></i>
                 </a>
                 <a href="#" class="nav-item" data-view="generate">
                     <i class="fas fa-magic"></i>
@@ -167,9 +174,22 @@
                                 <option value="professionnel">Professionnel</option>
                             </select>
                             <input type="text" id="client-search" placeholder="Rechercher...">
+                            <button class="btn btn-secondary btn-sm" onclick="clearClientFilters()" title="Réinitialiser les filtres">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     </div>
                     <div id="clients-table-container"></div>
+                    
+                    <!-- Client Detail View -->
+                    <div id="client-detail" style="display: none;">
+                        <div class="view-toolbar">
+                            <button class="btn btn-secondary" onclick="backToClientsList()">
+                                <i class="fas fa-arrow-left"></i> Retour à la liste
+                            </button>
+                        </div>
+                        <div id="client-detail-content"></div>
+                    </div>
                 </div>
 
                 <!-- Addresses View -->
@@ -178,8 +198,33 @@
                         <button class="btn btn-primary" onclick="showAddressModal()">
                             <i class="fas fa-plus"></i> Nouvelle adresse
                         </button>
+                        <button class="btn btn-secondary" onclick="showAddressesMap()">
+                            <i class="fas fa-map"></i> Voir sur la carte
+                        </button>
+                        <div class="toolbar-filters">
+                            <select id="address-type-filter">
+                                <option value="">Tous les types</option>
+                                <option value="siege_social">Siège social</option>
+                                <option value="entrepot">Entrepôt</option>
+                                <option value="chantier">Chantier</option>
+                            </select>
+                            <input type="text" id="address-search" placeholder="Rechercher...">
+                            <button class="btn btn-secondary btn-sm" onclick="clearAddressFilters()" title="Réinitialiser les filtres">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                     <div id="addresses-table-container"></div>
+                    
+                    <!-- Address Detail View -->
+                    <div id="address-detail" style="display: none;">
+                        <div class="view-toolbar">
+                            <button class="btn btn-secondary" onclick="backToAddressesList()">
+                                <i class="fas fa-arrow-left"></i> Retour à la liste
+                            </button>
+                        </div>
+                        <div id="address-detail-content"></div>
+                    </div>
                 </div>
 
                 <!-- Sites View -->
@@ -188,8 +233,51 @@
                         <button class="btn btn-primary" onclick="showSiteModal()">
                             <i class="fas fa-plus"></i> Nouveau chantier
                         </button>
+                        <button class="btn btn-secondary" onclick="showAllSitesMap()">
+                            <i class="fas fa-map"></i> Voir la carte
+                        </button>
+                        <div class="toolbar-filters">
+                            <select id="site-building-filter">
+                                <option value="">Toutes les catégories</option>
+                                <option value="HAB-IND">Habitation individuelle</option>
+                                <option value="HAB-COL">Habitation collective</option>
+                                <option value="COM">Commercial</option>
+                                <option value="IND">Industriel</option>
+                                <option value="AGR">Agricole</option>
+                                <option value="ERP">ERP</option>
+                                <option value="BUR">Bureaux</option>
+                                <option value="MIX">Mixte</option>
+                                <option value="IGH">IGH</option>
+                                <option value="OAR">Ouvrage d'art</option>
+                            </select>
+                            <select id="site-work-filter">
+                                <option value="">Tous les travaux</option>
+                                <option value="CONST-NEUF">Construction neuve</option>
+                                <option value="EXT">Extension</option>
+                                <option value="RENOV-L">Rénovation légère</option>
+                                <option value="RENOV-H">Rénovation lourde</option>
+                                <option value="REHAB">Réhabilitation</option>
+                                <option value="TRANSF">Transformation</option>
+                                <option value="SURES">Surélévation</option>
+                                <option value="SOUS-SOL">Travaux en sous-sol</option>
+                            </select>
+                            <input type="text" id="site-search" placeholder="Rechercher...">
+                            <button class="btn btn-secondary btn-sm" onclick="clearSiteFilters()" title="Réinitialiser les filtres">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                     <div id="sites-table-container"></div>
+                    
+                    <!-- Site Detail View -->
+                    <div id="site-detail" style="display: none;">
+                        <div class="view-toolbar">
+                            <button class="btn btn-secondary" onclick="backToSitesList()">
+                                <i class="fas fa-arrow-left"></i> Retour à la liste
+                            </button>
+                        </div>
+                        <div id="site-detail-content"></div>
+                    </div>
                 </div>
 
                 <!-- Contracts View -->
@@ -199,6 +287,14 @@
                             <i class="fas fa-plus"></i> Nouveau contrat
                         </button>
                         <div class="toolbar-filters">
+                            <select id="contract-type-filter">
+                                <option value="">Tous les types</option>
+                                <option value="RC-DEC">RC Décennale</option>
+                                <option value="RC-PRO">RC Pro</option>
+                                <option value="TRC">TRC</option>
+                                <option value="DOM">Dommages Ouvrage</option>
+                                <option value="CNR">CNR</option>
+                            </select>
                             <select id="contract-status-filter">
                                 <option value="">Tous les statuts</option>
                                 <option value="brouillon">Brouillon</option>
@@ -207,9 +303,25 @@
                                 <option value="expire">Expiré</option>
                                 <option value="resilie">Résilié</option>
                             </select>
+                            <input type="date" id="contract-date-from" placeholder="Date début">
+                            <input type="date" id="contract-date-to" placeholder="Date fin">
+                            <input type="text" id="contract-search" placeholder="Rechercher...">
+                            <button class="btn btn-secondary btn-sm" onclick="clearContractFilters()" title="Réinitialiser les filtres">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     </div>
                     <div id="contracts-table-container"></div>
+                    
+                    <!-- Contract Detail View -->
+                    <div id="contract-detail" style="display: none;">
+                        <div class="view-toolbar">
+                            <button class="btn btn-secondary" onclick="backToContractsList()">
+                                <i class="fas fa-arrow-left"></i> Retour à la liste
+                            </button>
+                        </div>
+                        <div id="contract-detail-content"></div>
+                    </div>
                 </div>
 
                 <!-- Claims View -->
@@ -245,6 +357,87 @@
                         </div>
                     </div>
                     <div id="claims-table-container"></div>
+                    
+                    <!-- Claim Detail View -->
+                    <div id="claim-detail" style="display: none;">
+                        <div class="view-toolbar">
+                            <button class="btn btn-secondary" onclick="backToClaimsList()">
+                                <i class="fas fa-arrow-left"></i> Retour à la liste
+                            </button>
+                            <button class="btn btn-primary" onclick="editClaim()">
+                                <i class="fas fa-edit"></i> Modifier
+                            </button>
+                        </div>
+                        <div id="claim-detail-content"></div>
+                    </div>
+                </div>
+                <!-- Claim Search View -->
+                <div id="claim-search-view" class="view">
+                    <div class="view-toolbar">
+                        <h2>Recherche de sinistres</h2>
+                    </div>
+                    
+                    <div class="search-section" style="background: var(--bg-primary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input type="text" id="claim-search-input" placeholder="Rechercher par numéro de sinistre, titre..." style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+                            <button class="btn btn-primary" onclick="searchClaimsAdvanced()">
+                                <i class="fas fa-search"></i> Rechercher
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearClaimSearch()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="claim-search-results"></div>
+                    
+                    <div id="claim-detail-view" style="display: none;">
+                        <button class="btn btn-secondary" onclick="backToClaimSearch()" style="margin-bottom: 16px;">
+                            <i class="fas fa-arrow-left"></i> Retour aux résultats
+                        </button>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div id="claim-detail-left" style="background: var(--bg-primary); padding: 20px; border-radius: 8px;"></div>
+                            <div id="claim-detail-right">
+                                <div id="claim-client-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
+                                <div id="claim-contract-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
+                                <div id="claim-guarantees-list" style="background: var(--bg-primary); padding: 16px; border-radius: 8px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Claim Search View -->
+                <div id="claim-search-view" class="view">
+                    <div class="view-toolbar">
+                        <h2>Recherche de sinistres</h2>
+                    </div>
+                    
+                    <div class="search-section" style="background: var(--bg-primary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input type="text" id="claim-search-input" placeholder="Rechercher par numéro de sinistre, nom du client..." style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+                            <button class="btn btn-primary" onclick="searchClaimsAdvanced()">
+                                <i class="fas fa-search"></i> Rechercher
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearClaimSearch()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="claim-search-results"></div>
+                    
+                    <div id="claim-detail-view" style="display: none;">
+                        <button class="btn btn-secondary" onclick="backToClaimSearch()" style="margin-bottom: 16px;">
+                            <i class="fas fa-arrow-left"></i> Retour aux résultats
+                        </button>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div id="claim-detail-left" style="background: var(--bg-primary); padding: 20px; border-radius: 8px;"></div>
+                            <div id="claim-detail-right">
+                                <div id="claim-client-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
+                                <div id="claim-contract-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
+                                <div id="claim-guarantees-list" style="background: var(--bg-primary); padding: 16px; border-radius: 8px;"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- History View -->
@@ -399,6 +592,24 @@
 
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
+
+    <!-- Map Modal -->
+    <div id="map-modal" class="modal-overlay">
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h3 id="map-modal-title">Carte des adresses</h3>
+                <button class="modal-close" onclick="closeMapModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div id="addresses-map" style="height: 70vh; width: 100%;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeMapModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
 
     <script src="/static/api.js?v=5"></script>
     <script src="/static/phonetic.js?v=5"></script>

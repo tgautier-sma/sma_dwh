@@ -148,15 +148,18 @@ def generate_claim_description(claim_type: str) -> tuple:
     area = random.choice(template["areas"])
     guarantees = template["guarantees"]
     
+    # Préparation des choix pour éviter les backslash dans f-strings
+    humidite_traces = "traces d'humidité"
+    
     descriptions = {
         "structurel": f"Apparition de {random.choice(['fissures', 'lézardes', 'déformations', 'affaissements'])} "
-                     f"d'une {random.choice(['largeur', 'profondeur'])} de {random.randint(5, 50)}mm. "
+                     f"avec une {random.choice(['largeur', 'profondeur'])} de {random.randint(5, 50)}mm. "
                      f"Les désordres sont visibles {random.choice(['en façade', 'en intérieur', 'sur plusieurs niveaux'])}. "
-                     f"Expertise technique nécessaire pour déterminer l'origine et l'ampleur des dommages.",
+                     f"Expertise technique nécessaire pour déterminer origine et ampleur des dommages.",
         
-        "degats_des_eaux": f"Constatation d'une {random.choice(['infiltration', 'fuite', 'inondation'])} "
+        "degats_des_eaux": f"Constatation de {random.choice(['infiltration', 'fuite', 'inondation'])} "
                           f"ayant causé des dégâts sur environ {random.randint(5, 50)}m². "
-                          f"Présence de {random.choice(['traces d\'humidité', 'moisissures', 'détérioration des revêtements'])}. "
+                          f"Présence de {random.choice([humidite_traces, 'moisissures', 'détérioration des revêtements'])}. "
                           f"Origine : {random.choice(['toiture', 'canalisation', 'façade', 'installation sanitaire'])}.",
         
         "incendie": f"Incendie survenu le {fake.date_between(start_date='-30d', end_date='today').strftime('%d/%m/%Y')}. "
@@ -169,7 +172,7 @@ def generate_claim_description(claim_type: str) -> tuple:
                       f"constatation de dommages importants. "
                       f"Éléments endommagés : {random.choice(['toiture', 'bardage', 'menuiseries', 'installations extérieures'])}.",
         
-        "vol": f"Constatation d'un vol de {random.choice(['matériaux', 'équipements', 'outillage', 'métaux'])} "
+        "vol": f"Constatation de vol de {random.choice(['matériaux', 'équipements', 'outillage', 'métaux'])} "
               f"sur le site. Valeur estimée : {random.randint(500, 20000)}€. "
               f"Dépôt de plainte effectué. Mesures de sécurité à renforcer.",
         
@@ -177,7 +180,7 @@ def generate_claim_description(claim_type: str) -> tuple:
                      f"Nature des dégradations : {random.choice(['tags', 'bris', 'destruction', 'détérioration'])}. "
                      f"Dépôt de plainte en cours.",
         
-        "malfacons": f"Constatation de malfaçons concernant {random.choice(['l\'isolation', 'l\'étanchéité', 'les finitions', 'les installations'])}. "
+        "malfacons": f"Constatation de malfaçons concernant {random.choice(['isolation', 'étanchéité', 'finitions', 'installations'])}. "
                     f"Non-conformité avec les normes {random.choice(['DTU', 'NF', 'RT2012', 'RE2020'])}. "
                     f"Expertise technique requise pour évaluation des travaux de reprise.",
         
@@ -334,10 +337,11 @@ def create_claim(db: Session, contract_id: int = None, verbose: bool = True) -> 
     police_report = None
     
     if third_party:
+        insurance_companies = ["AXA", "Allianz", "MAIF", "MAAF", "Generali"]
         third_party_info = {
             "name": fake.name(),
             "contact": fake.phone_number(),
-            "insurance": random.choice(["AXA", "Allianz", "MAIF", "MAAF", "Generali"])
+            "insurance": random.choice(insurance_companies)
         }
         if claim_type in ["vol", "vandalisme", "rc"]:
             police_report = f"PV-{random.randint(10000, 99999)}"
@@ -418,9 +422,13 @@ def create_claim(db: Session, contract_id: int = None, verbose: bool = True) -> 
     db.refresh(claim)
     
     if verbose:
+        # Récupérer le client via le contrat
+        client = contract.client
+        client_display = client.company_name if client.company_name else f"{client.first_name} {client.last_name}"
         print(f"  ✅ Sinistre créé: {claim.claim_number}")
-        print(f"     Type: {claim.claim_type} - Gravité: {claim.severity} - Statut: {claim.status}")
+        print(f"     Client: {client_display}")
         print(f"     Contrat: {contract.contract_number}")
+        print(f"     Type: {claim.claim_type} - Gravité: {claim.severity} - Statut: {claim.status}")
         print(f"     Montant estimé: {claim.estimated_amount:.2f}€")
     
     return claim

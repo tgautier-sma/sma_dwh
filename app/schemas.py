@@ -196,6 +196,8 @@ class ConstructionSiteBase(BaseModel):
     city: str
     department: Optional[str] = None
     region: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     building_category_code: Optional[str] = None
     work_category_code: Optional[str] = None
     total_surface_m2: Optional[float] = None

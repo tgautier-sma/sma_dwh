@@ -48,11 +48,16 @@ class AddressTypeEnum(str, enum.Enum):
 contract_guarantees = Table(
     'fake_contract_guarantees',
     Base.metadata,
-    Column('contract_id', Integer, ForeignKey('fake_client_contracts.id'), primary_key=True),
-    Column('guarantee_id', Integer, ForeignKey('fake_ref_guarantees.id'), primary_key=True),
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('contract_id', Integer, ForeignKey('fake_client_contracts.id')),
+    Column('guarantee_id', Integer, ForeignKey('fake_ref_guarantees.id'), nullable=True),
+    Column('guarantee_code', String(30), nullable=True),  # Code si pas de guarantee_id
     Column('custom_ceiling', Float, nullable=True),
     Column('custom_franchise', Float, nullable=True),
-    Column('is_included', Boolean, default=True)
+    Column('is_included', Boolean, default=True),
+    Column('annual_premium', Float, nullable=True),
+    Column('created_at', DateTime, default=datetime.utcnow),
+    Column('updated_at', DateTime, default=datetime.utcnow)
 )
 
 # Association contrat <-> clauses applicables
@@ -246,6 +251,8 @@ class ConstructionSiteModel(Base):
     city = Column(String(100), nullable=False)
     department = Column(String(3), nullable=True)
     region = Column(String(100), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     
     # Caractéristiques de l'ouvrage
     building_category_code = Column(String(20), nullable=True)  # Lien ref_building_categories
