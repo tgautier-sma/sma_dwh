@@ -2,11 +2,164 @@
 // Utiliser une URL relative pour que ça fonctionne avec n'importe quel domaine
 const API_BASE_URL = '';
 
-// API Client
+// API Client avec support du mode hors ligne
 class API {
     constructor(baseUrl) {
         this.baseUrl = baseUrl;
+        this.isOnline = navigator.onLine;
+        this.dbReady = false;
         console.log('API initialized with baseUrl:', this.baseUrl);
+        
+        // Écouter les changements de connexion
+        window.addEventListener('online', () => {
+            console.log('Connexion réseau restaurée');
+            this.isOnline = true;
+            this.syncPendingChanges();
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('Connexion réseau perdue - Mode hors ligne activé');
+            this.isOnline = false;
+        });
+        
+        // Initialiser IndexedDB
+        this.initDB();
+    }
+
+    async initDB() {
+        try {
+            if (typeof dbManager !== 'undefined') {
+                await dbManager.init();
+                this.dbReady = true;
+                console.log('IndexedDB initialisé et prêt');
+                
+                // Vérifier si des données existent déjà
+                const stats = await dbManager.getStats();
+                const hasData = stats.claims > 0 || stats.clients > 0 || stats.contracts > 0;
+                
+                // Si pas de données et en ligne, proposer le téléchargement
+                if (!hasData && this.isOnline) {
+                    this.showDownloadPrompt();
+                }
+            }
+        } catch (error) {
+            console.error('Erreur d\'initialisation IndexedDB:', error);
+        }
+    }
+
+    showDownloadPrompt() {
+        if (typeof window.showOfflineDownloadModal === 'function') {
+            window.showOfflineDownloadModal();
+        }
+    }
+
+    async downloadAllData(progressCallback) {
+        try {
+            console.log('🔄 Téléchargement de toutes les données pour le mode hors ligne...');
+            const steps = 8;
+            let currentStep = 0;
+            
+            // Étape 1: Charger les sinistres
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement des sinistres...');
+            console.log('Chargement des sinistres...');
+            const claimsResponse = await this.getClaims({ limit: 100 });
+            if (claimsResponse.items && claimsResponse.items.length > 0) {
+                await dbManager.saveClaims(claimsResponse.items);
+                console.log(`✅ ${claimsResponse.items.length} sinistres sauvegardés`);
+            }
+            
+            // Étape 2: Charger les clients
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement des clients...');
+            console.log('Chargement des clients...');
+            const clients = await this.getClients({ limit: 100 });
+            if (Array.isArray(clients) && clients.length > 0) {
+                await dbManager.saveClients(clients);
+                console.log(`✅ ${clients.length} clients sauvegardés`);
+            }
+            
+            // Étape 3: Charger les contrats
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement des contrats...');
+            console.log('Chargement des contrats...');
+            const contractsResponse = await this.getContracts(null, { limit: 100 });
+            if (contractsResponse.items && contractsResponse.items.length > 0) {
+                await dbManager.saveContracts(contractsResponse.items);
+                console.log(`✅ ${contractsResponse.items.length} contrats sauvegardés`);
+            }
+            
+            // Étape 4: Charger les adresses
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement des adresses...');
+            console.log('Chargement des adresses...');
+            const addresses = await this.getAddresses();
+            if (Array.isArray(addresses) && addresses.length > 0) {
+                await dbManager.saveAddresses(addresses);
+                console.log(`✅ ${addresses.length} adresses sauvegardées`);
+            }
+            
+            // Étape 5: Charger les chantiers
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement des chantiers...');
+            console.log('Chargement des chantiers...');
+            const sites = await this.getSites();
+            if (Array.isArray(sites) && sites.length > 0) {
+                await dbManager.saveSites(sites);
+                console.log(`✅ ${sites.length} chantiers sauvegardés`);
+            }
+            
+            // Étape 6: Charger l'historique
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement de l\'historique...');
+            console.log('Chargement de l\'historique...');
+            const history = await this.getContractHistory();
+            if (Array.isArray(history) && history.length > 0) {
+                await dbManager.saveHistory(history);
+                console.log(`✅ ${history.length} entrées d'historique sauvegardées`);
+            }
+            
+            // Étape 7: Charger les référentiels
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Téléchargement des référentiels...');
+            console.log('Chargement des référentiels...');
+            const [guarantees, contractTypes, clauses, buildingCategories, workCategories, professions] = await Promise.all([
+                this.getGuaranteeTypes(),
+                this.getContractTypes(),
+                this.getClauses(),
+                this.getBuildingCategories(),
+                this.getWorkCategories(),
+                this.getProfessions()
+            ]);
+            await dbManager.saveReferential('guarantees', guarantees);
+            await dbManager.saveReferential('contract_types', contractTypes);
+            await dbManager.saveReferential('clauses', clauses);
+            await dbManager.saveReferential('building_categories', buildingCategories);
+            await dbManager.saveReferential('work_categories', workCategories);
+            await dbManager.saveReferential('professions', professions);
+            console.log('✅ Référentiels sauvegardés');
+            
+            // Étape 8: Finalisation
+            currentStep++;
+            if (progressCallback) progressCallback(currentStep, steps, 'Finalisation...');
+            
+            // Mettre à jour la date de dernière synchronisation
+            await dbManager.setMetadata('last_sync', new Date().toISOString());
+            await dbManager.setMetadata('full_download_completed', 'true');
+            
+            // Afficher un résumé
+            const stats = await dbManager.getStats();
+            console.log('📊 Résumé du cache:', stats);
+            console.log('✅ Téléchargement complet terminé');
+            
+            if (progressCallback) progressCallback(steps, steps, 'Téléchargement terminé !', true);
+            
+            return stats;
+        } catch (error) {
+            console.error('❌ Erreur lors du téléchargement:', error);
+            if (progressCallback) progressCallback(0, 0, 'Erreur: ' + error.message, false, true);
+            throw error;
+        }
     }
 
     async request(endpoint, options = {}) {
@@ -27,11 +180,199 @@ class API {
                 throw new Error(error.detail || `HTTP error! status: ${response.status}`);
             }
 
-            return await response.json();
+            const data = await response.json();
+            
+            // Si la requête est réussie et que c'est un GET, mettre en cache
+            if (!options.method || options.method === 'GET') {
+                this.cacheResponse(endpoint, data);
+            }
+            
+            return data;
         } catch (error) {
             console.error('API Error:', error);
             console.error('Failed URL:', url);
+            
+            // En cas d'erreur de fetch (hors ligne ou erreur réseau), essayer le cache pour les GET
+            // Ne pas se fier uniquement à navigator.onLine qui peut être inexact
+            if (!options.method || options.method === 'GET') {
+                console.log('📦 Tentative de récupération depuis le cache local pour:', endpoint);
+                const cachedData = await this.getCachedResponse(endpoint);
+                if (cachedData) {
+                    console.log('✅ Données récupérées depuis le cache local:', Array.isArray(cachedData) ? `${cachedData.length} éléments` : typeof cachedData);
+                    return cachedData;
+                } else {
+                    console.warn('❌ Aucune donnée en cache pour:', endpoint);
+                    // Afficher le contenu du cache pour déboguer
+                    const stats = await dbManager.getStats();
+                    console.log('📊 État actuel du cache:', stats);
+                }
+            }
+            
             throw error;
+        }
+    }
+
+    async cacheResponse(endpoint, data) {
+        if (!this.dbReady) return;
+        
+        try {
+            // Déterminer le type de données et les sauvegarder appropriément
+            if (endpoint.includes('/claims')) {
+                if (Array.isArray(data)) {
+                    await dbManager.saveClaims(data);
+                } else if (data.items) {
+                    await dbManager.saveClaims(data.items);
+                }
+            } else if (endpoint.includes('/clients')) {
+                // Les clients peuvent être un array direct ou un objet avec items
+                const clientsArray = Array.isArray(data) ? data : (data.items || []);
+                if (clientsArray.length > 0) {
+                    await dbManager.saveClients(clientsArray);
+                }
+            } else if (endpoint.includes('/contracts')) {
+                // Les contrats peuvent être un array direct ou un objet avec items
+                const contractsArray = Array.isArray(data) ? data : (data.items || []);
+                if (contractsArray.length > 0) {
+                    await dbManager.saveContracts(contractsArray);
+                }
+            }
+        } catch (error) {
+            console.error('Erreur de mise en cache:', error);
+        }
+    }
+
+    async getCachedResponse(endpoint) {
+        if (!this.dbReady) return null;
+        
+        try {
+            // Nettoyer l'endpoint pour enlever les paramètres de query
+            const cleanEndpoint = endpoint.split('?')[0];
+            
+            // Récupérer depuis IndexedDB selon le type d'endpoint
+            if (cleanEndpoint.match(/\/claims\/\d+$/)) {
+                // Endpoint spécifique: /claims/12345
+                const claimNumber = cleanEndpoint.split('/').pop();
+                return await dbManager.getClaim(claimNumber);
+            } else if (cleanEndpoint.includes('/claims/search')) {
+                // Recherche de sinistres - retourner tous les sinistres
+                const claims = await dbManager.getAllClaims();
+                return { items: claims, total: claims.length };
+            } else if (cleanEndpoint.includes('/claims/stats')) {
+                // Stats des sinistres - calculer depuis le cache
+                const claims = await dbManager.getAllClaims();
+                return {
+                    total_claims: claims.length,
+                    open_claims: claims.filter(c => c.status === 'open').length,
+                    closed_claims: claims.filter(c => c.status === 'closed').length
+                };
+            } else if (cleanEndpoint.includes('/claims')) {
+                // Liste de tous les sinistres
+                const claims = await dbManager.getAllClaims();
+                return { items: claims, total: claims.length, skip: 0, limit: claims.length, page: 1, pages: 1 };
+            } else if (cleanEndpoint.match(/\/clients\/\d+$/)) {
+                // Endpoint spécifique: /clients/123
+                const clientId = cleanEndpoint.split('/').pop();
+                return await dbManager.getClient(clientId);
+            } else if (cleanEndpoint.includes('/clients/search')) {
+                // Recherche de clients - retourner tous les clients
+                const clients = await dbManager.getAllClients();
+                return { items: clients, total: clients.length };
+            } else if (cleanEndpoint.includes('/clients')) {
+                // Liste de tous les clients - retourne un array simple
+                const clients = await dbManager.getAllClients();
+                return clients;
+            } else if (cleanEndpoint.match(/\/contracts\/\d+$/)) {
+                // Endpoint spécifique: /contracts/456
+                const contractId = cleanEndpoint.split('/').pop();
+                return await dbManager.getContract(contractId);
+            } else if (cleanEndpoint.includes('/contracts/number/')) {
+                // Recherche par numéro de contrat
+                const contractNumber = cleanEndpoint.split('/number/')[1];
+                return await dbManager.getContractByNumber(contractNumber);
+            } else if (cleanEndpoint.includes('/contracts')) {
+                // Liste de tous les contrats
+                const contracts = await dbManager.getAllContracts();
+                return { items: contracts, total: contracts.length, skip: 0, limit: contracts.length, page: 1, pages: 1 };
+            } else if (cleanEndpoint.includes('/addresses')) {
+                // Adresses
+                const addresses = await dbManager.getAllAddresses();
+                return addresses;
+            } else if (cleanEndpoint.includes('/construction-sites') || cleanEndpoint.includes('/sites')) {
+                // Chantiers
+                const sites = await dbManager.getAllSites();
+                return sites;
+            } else if (cleanEndpoint.includes('/contract-history') || cleanEndpoint.includes('/history')) {
+                // Historique
+                const history = await dbManager.getAllHistory();
+                return history;
+            } else if (cleanEndpoint.includes('/stats')) {
+                // Stats générales - calculer depuis le cache
+                const stats = await dbManager.getStats();
+                const addresses = await dbManager.getAllAddresses();
+                return {
+                    total_clients: stats.clients || 0,
+                    total_contracts: stats.contracts || 0,
+                    total_claims: stats.claims || 0,
+                    total_addresses: addresses.length || 0,
+                    total_construction_sites: stats.sites || 0
+                };
+            } else if (cleanEndpoint.includes('/referentials/guarantees') || cleanEndpoint.includes('/referentials/guarantee-types')) {
+                return await dbManager.getReferential('guarantees');
+            } else if (cleanEndpoint.includes('/referentials/contract-types')) {
+                return await dbManager.getReferential('contract_types');
+            } else if (cleanEndpoint.includes('/referentials/clauses')) {
+                return await dbManager.getReferential('clauses');
+            } else if (cleanEndpoint.includes('/referentials/building-categories')) {
+                return await dbManager.getReferential('building_categories');
+            } else if (cleanEndpoint.includes('/referentials/work-categories')) {
+                return await dbManager.getReferential('work_categories');
+            } else if (cleanEndpoint.includes('/referentials/professions')) {
+                return await dbManager.getReferential('professions');
+            } else if (cleanEndpoint.includes('/referentials')) {
+                // Référentiel générique non géré
+                return [];
+            }
+        } catch (error) {
+            console.error('Erreur de récupération du cache:', error);
+        }
+        
+        return null;
+    }
+
+    async syncPendingChanges() {
+        if (!this.dbReady || !this.isOnline) return;
+        
+        try {
+            const pendingChanges = await dbManager.getPendingChanges();
+            console.log(`Synchronisation de ${pendingChanges.length} modifications en attente`);
+            
+            for (const change of pendingChanges) {
+                try {
+                    // Envoyer la modification au serveur
+                    await this.syncChange(change);
+                    
+                    // Supprimer la modification de la file d'attente
+                    await dbManager.deletePendingChange(change.id);
+                    console.log(`Modification ${change.id} synchronisée`);
+                } catch (error) {
+                    console.error(`Erreur de synchronisation de la modification ${change.id}:`, error);
+                }
+            }
+        } catch (error) {
+            console.error('Erreur de synchronisation:', error);
+        }
+    }
+
+    async syncChange(change) {
+        switch (change.entity_type) {
+            case 'claim':
+                return await this.updateClaim(change.entity_id, change.data);
+            case 'contract':
+                return await this.updateContract(change.entity_id, change.data);
+            case 'client':
+                return await this.updateClient(change.entity_id, change.data);
+            default:
+                throw new Error(`Type d'entité non géré: ${change.entity_type}`);
         }
     }
 
@@ -272,6 +613,12 @@ class API {
     }
 
     async searchClaims(query) {
+        // En mode hors ligne, rechercher dans IndexedDB
+        if (!this.isOnline && this.dbReady) {
+            console.log('Recherche hors ligne dans IndexedDB');
+            return await dbManager.searchClaims(query);
+        }
+        
         return this.request(`/claims/search?query=${encodeURIComponent(query)}`);
     }
 
@@ -291,6 +638,13 @@ class API {
     }
 
     async updateClaim(claimNumber, claimData) {
+        // Si hors ligne, sauvegarder la modification localement
+        if (!this.isOnline && this.dbReady) {
+            console.log('Mode hors ligne: sauvegarde locale de la modification');
+            await dbManager.updateClaim(claimNumber, claimData);
+            return { ...claimData, claim_number: claimNumber, offline: true };
+        }
+        
         return this.request(`/claims/${claimNumber}`, {
             method: 'PUT',
             body: JSON.stringify(claimData),

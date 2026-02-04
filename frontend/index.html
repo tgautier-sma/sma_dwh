@@ -7,12 +7,51 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Gestion Assurance Construction - SMA DWH</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="description" content="Application de gestion des sinistres construction - Mode hors ligne disponible">
     <link rel="stylesheet" href="/static/styles.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/db-manager.js"></script>
 </head>
 <body>
+    <!-- Modale de téléchargement hors ligne -->
+    <div id="offline-download-modal" class="modal-overlay" style="display: none;">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-download"></i> Téléchargement pour mode hors ligne</h3>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 20px;">
+                    Pour utiliser l'application sans connexion Internet, téléchargez toutes les données maintenant.
+                </p>
+                <div id="download-progress-container" style="display: none;">
+                    <div class="progress-info" style="margin-bottom: 10px; display: flex; justify-content: space-between;">
+                        <span id="download-progress-text">Préparation...</span>
+                        <span id="download-progress-percent">0%</span>
+                    </div>
+                    <div class="progress-bar" style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="download-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #2563eb); transition: width 0.3s ease;"></div>
+                    </div>
+                    <div id="download-stats" style="margin-top: 15px; padding: 10px; background: #f3f4f6; border-radius: 4px; font-size: 0.9em; display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-start-download" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Télécharger maintenant
+                </button>
+                <button id="btn-skip-download" class="btn btn-secondary">
+                    Plus tard
+                </button>
+                <button id="btn-close-download" class="btn btn-secondary" style="display: none;">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
@@ -75,6 +114,9 @@
                     <i class="fas fa-circle" id="api-status-icon"></i>
                     <span id="api-status-text">Vérification...</span>
                 </div>
+                <button id="btn-sync-offline" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 10px;" title="Télécharger les données pour le mode hors ligne">
+                    <i class="fas fa-download"></i> Mode hors ligne
+                </button>
             </div>
         </aside>
 
@@ -613,6 +655,214 @@
 
     <script src="/static/api.js?v=5"></script>
     <script src="/static/phonetic.js?v=5"></script>
+    <script src="/static/sync-manager.js"></script>
     <script src="/static/app.js?v=5"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        // Enregistrer le service worker pour le mode hors ligne
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', async () => {
+                try {
+                    const registration = await navigator.serviceWorker.register('/static/service-worker.js');
+                    console.log('Service Worker enregistré avec succès:', registration.scope);
+                    
+                    // Afficher une notification si une mise à jour est disponible
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                showOfflineNotification('Nouvelle version disponible ! Rechargez la page pour mettre à jour.', 'info');
+                            }
+                        });
+                    });
+                } catch (error) {
+                    console.error('Erreur d\'enregistrement du Service Worker:', error);
+                }
+            });
+        }
+        
+        // Afficher l'état de la connexion
+        function updateOnlineStatus() {
+            const status = navigator.onLine ? 'en ligne' : 'hors ligne';
+            const color = navigator.onLine ? 'green' : 'orange';
+            const btnSyncOffline = document.getElementById('btn-sync-offline');
+            
+            console.log(`Mode ${status}`);
+            
+            // Mettre à jour le bouton Mode hors ligne
+            if (btnSyncOffline) {
+                if (!navigator.onLine) {
+                    btnSyncOffline.classList.remove('btn-secondary');
+                    btnSyncOffline.classList.add('btn-success');
+                    btnSyncOffline.innerHTML = '<i class="fas fa-check-circle"></i> Mode hors ligne actif';
+                } else {
+                    btnSyncOffline.classList.remove('btn-success');
+                    btnSyncOffline.classList.add('btn-secondary');
+                    btnSyncOffline.innerHTML = '<i class="fas fa-download"></i> Mode hors ligne';
+                }
+            }
+            
+            // Afficher une notification visuelle
+            showOfflineNotification(
+                navigator.onLine ? 'Connexion restaurée' : 'Mode hors ligne - Les données sont disponibles localement',
+                navigator.onLine ? 'success' : 'warning'
+            );
+        }
+        
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        // Fonction pour afficher une notification
+        function showOfflineNotification(message, type = 'info') {
+            // Créer un élément de notification s'il n'existe pas
+            let notification = document.getElementById('offline-notification');
+            if (!notification) {
+                notification = document.createElement('div');
+                notification.id = 'offline-notification';
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 10000;
+                    max-width: 400px;
+                    font-family: Arial, sans-serif;
+                    font-size: 14px;
+                    transition: opacity 0.3s, transform 0.3s;
+                    transform: translateX(0);
+                `;
+                document.body.appendChild(notification);
+            }
+            
+            // Définir les couleurs selon le type
+            const colors = {
+                success: { bg: '#d4edda', border: '#c3e6cb', text: '#155724' },
+                warning: { bg: '#fff3cd', border: '#ffeaa7', text: '#856404' },
+                info: { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460' },
+                error: { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24' }
+            };
+            
+            const color = colors[type] || colors.info;
+            notification.style.backgroundColor = color.bg;
+            notification.style.borderLeft = `4px solid ${color.border}`;
+            notification.style.color = color.text;
+            notification.textContent = message;
+            notification.style.opacity = '1';
+            
+            // Masquer automatiquement après 5 secondes
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(400px)';
+            }, 5000);
+        }
+        
+        // Fonctions pour gérer la modale de téléchargement hors ligne
+        window.showOfflineDownloadModal = function() {
+            const modal = document.getElementById('offline-download-modal');
+            const progressContainer = document.getElementById('download-progress-container');
+            const btnStart = document.getElementById('btn-start-download');
+            const btnSkip = document.getElementById('btn-skip-download');
+            const btnClose = document.getElementById('btn-close-download');
+            
+            modal.style.display = 'flex';
+            progressContainer.style.display = 'none';
+            btnStart.style.display = 'inline-block';
+            btnSkip.style.display = 'inline-block';
+            btnClose.style.display = 'none';
+        };
+        
+        window.closeOfflineDownloadModal = function() {
+            document.getElementById('offline-download-modal').style.display = 'none';
+        };
+        
+        window.startOfflineDownload = async function() {
+            const progressContainer = document.getElementById('download-progress-container');
+            const btnStart = document.getElementById('btn-start-download');
+            const btnSkip = document.getElementById('btn-skip-download');
+            const btnClose = document.getElementById('btn-close-download');
+            const progressBar = document.getElementById('download-progress-bar');
+            const progressText = document.getElementById('download-progress-text');
+            const progressPercent = document.getElementById('download-progress-percent');
+            const downloadStats = document.getElementById('download-stats');
+            
+            // Afficher la barre de progression
+            progressContainer.style.display = 'block';
+            btnStart.style.display = 'none';
+            btnSkip.style.display = 'none';
+            
+            let finalStats = null;
+            
+            try {
+                // Lancer le téléchargement avec callback de progression
+                finalStats = await api.downloadAllData((current, total, message, completed = false, error = false) => {
+                    const percent = Math.round((current / total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressPercent.textContent = percent + '%';
+                    progressText.textContent = message;
+                    
+                    if (error) {
+                        progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+                        progressText.style.color = '#dc2626';
+                        btnClose.style.display = 'inline-block';
+                    } else if (completed) {
+                        progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                        progressText.style.color = '#059669';
+                        btnClose.style.display = 'inline-block';
+                    }
+                });
+                
+                // Afficher les statistiques après téléchargement
+                if (finalStats) {
+                    downloadStats.style.display = 'block';
+                    downloadStats.innerHTML = `
+                        <strong>Téléchargement terminé !</strong><br>
+                        📊 <strong>${finalStats.claims || 0}</strong> sinistres<br>
+                        👥 <strong>${finalStats.clients || 0}</strong> clients<br>
+                        📄 <strong>${finalStats.contracts || 0}</strong> contrats<br>
+                        <br>
+                        <em>Vous pouvez maintenant utiliser l'application hors ligne.</em>
+                    `;
+                }
+            } catch (error) {
+                console.error('Erreur lors du téléchargement:', error);
+                progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+                progressText.textContent = 'Erreur: ' + error.message;
+                progressText.style.color = '#dc2626';
+                btnClose.style.display = 'inline-block';
+            }
+        };
+        
+        // Gestionnaires d'événements pour la modale
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnStart = document.getElementById('btn-start-download');
+            const btnSkip = document.getElementById('btn-skip-download');
+            const btnClose = document.getElementById('btn-close-download');
+            const btnSyncOffline = document.getElementById('btn-sync-offline');
+            
+            if (btnStart) {
+                btnStart.addEventListener('click', startOfflineDownload);
+            }
+            
+            if (btnSkip) {
+                btnSkip.addEventListener('click', closeOfflineDownloadModal);
+            }
+            
+            if (btnClose) {
+                btnClose.addEventListener('click', closeOfflineDownloadModal);
+            }
+            
+            if (btnSyncOffline) {
+                btnSyncOffline.addEventListener('click', () => {
+                    showOfflineDownloadModal();
+                });
+            }
+            
+            // Initialiser l'état du bouton au chargement
+            updateOnlineStatus();
+        });
+    </script>
 </body>
 </html>
