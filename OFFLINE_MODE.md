@@ -7,6 +7,7 @@ L'application SMA DWH supporte maintenant le **mode hors ligne complet** grâce 
 ## 🚀 Fonctionnalités Disponibles
 
 ### ✅ En Mode Hors Ligne
+
 - **Consultation** de tous les sinistres préchargés
 - **Recherche** dans les données locales
 - **Consultation** des détails des sinistres, contrats et clients
@@ -15,6 +16,7 @@ L'application SMA DWH supporte maintenant le **mode hors ligne complet** grâce 
 - **Navigation** complète dans l'application
 
 ### 🔄 Synchronisation Automatique
+
 - Les données sont **préchargées** au premier accès
 - Les modifications hors ligne sont **trackées** localement
 - **Synchronisation automatique** lors du retour en ligne
@@ -23,21 +25,27 @@ L'application SMA DWH supporte maintenant le **mode hors ligne complet** grâce 
 ## 📦 Fichiers Créés
 
 ### 1. `manifest.json`
+
 Configuration PWA pour rendre l'application installable :
+
 - Nom de l'application
 - Icônes
 - Thème couleur
 - Mode d'affichage standalone
 
 ### 2. `service-worker.js`
+
 Service Worker pour la gestion du cache :
+
 - **Cache statique** : ressources HTML, CSS, JS
 - **Cache API** : données des sinistres, contrats, clients
 - **Cache images** : tuiles de cartes OpenStreetMap
 - Stratégies de cache : Network First pour API, Cache First pour ressources statiques
 
 ### 3. `db-manager.js`
+
 Gestionnaire IndexedDB pour le stockage local :
+
 - **Claims** : stockage des sinistres
 - **Contracts** : stockage des contrats
 - **Clients** : stockage des clients
@@ -46,14 +54,18 @@ Gestionnaire IndexedDB pour le stockage local :
 - **Metadata** : métadonnées (dernière synchro, etc.)
 
 ### 4. `sync-manager.js`
+
 Gestionnaire de synchronisation :
+
 - Synchronisation automatique au retour en ligne
 - Synchronisation périodique (toutes les 5 minutes)
 - Gestion des conflits
 - Notifications de synchronisation
 
 ### 5. Modifications `api.js`
+
 API enrichie avec support hors ligne :
+
 - Détection automatique du mode en ligne/hors ligne
 - Utilisation d'IndexedDB quand hors ligne
 - Préchargement automatique des données
@@ -111,6 +123,7 @@ getSyncStatus().then(status => console.log(status))
 ## 🎯 Scénarios d'Utilisation
 
 ### Scenario 1 : Consultation Hors Ligne
+
 1. Chargez l'application avec connexion internet
 2. Les données sont automatiquement préchargées
 3. Coupez la connexion internet
@@ -118,6 +131,7 @@ getSyncStatus().then(status => console.log(status))
 5. La recherche fonctionne sur les données locales
 
 ### Scenario 2 : Modification Hors Ligne
+
 1. Ouvrez un sinistre en mode hors ligne
 2. Modifiez les informations
 3. Les modifications sont sauvegardées localement
@@ -125,6 +139,7 @@ getSyncStatus().then(status => console.log(status))
 5. Les modifications sont envoyées au serveur
 
 ### Scenario 3 : Installation comme Application
+
 1. Installez l'application sur votre appareil
 2. Lancez-la depuis l'icône
 3. Fonctionne comme une application native
@@ -133,10 +148,12 @@ getSyncStatus().then(status => console.log(status))
 ## 📊 Stockage Local
 
 ### Limites de Stockage
+
 - **IndexedDB** : ~50 MB minimum, souvent plusieurs GB selon le navigateur
 - **Service Worker Cache** : 50 MB recommandé
 
 ### Données Stockées Localement
+
 - Jusqu'à 100 sinistres récents
 - Contrats associés
 - Clients
@@ -153,34 +170,42 @@ getSyncStatus().then(status => console.log(status))
 ## 🐛 Dépannage
 
 ### L'application ne fonctionne pas hors ligne
+
 1. Vérifier que le Service Worker est enregistré :
+
    ```javascript
    navigator.serviceWorker.getRegistrations().then(r => console.log(r))
    ```
 
 2. Vérifier IndexedDB :
+
    ```javascript
    dbManager.getStats().then(stats => console.log(stats))
    ```
 
 3. Réinitialiser les données :
+
    ```javascript
    resetData()
    ```
 
 ### Les modifications ne se synchronisent pas
+
 1. Vérifier la connexion internet
 2. Forcer la synchronisation :
+
    ```javascript
    forceSync()
    ```
 
 3. Vérifier les modifications en attente :
+
    ```javascript
    dbManager.getPendingChanges().then(c => console.log(c))
    ```
 
 ### Réinitialisation Complète
+
 ```javascript
 // Désinscrire le Service Worker
 navigator.serviceWorker.getRegistrations().then(registrations => {
@@ -204,6 +229,7 @@ location.reload()
 ### Pour Ajouter une Nouvelle Fonctionnalité Hors Ligne
 
 1. **Ajouter le stockage dans `db-manager.js`** :
+
    ```javascript
    async saveNewEntity(entities) {
        const transaction = this.db.transaction(['new_entity'], 'readwrite');
@@ -215,6 +241,7 @@ location.reload()
    ```
 
 2. **Modifier `api.js`** pour supporter le mode hors ligne :
+
    ```javascript
    async getNewEntity(id) {
        if (!this.isOnline && this.dbReady) {
@@ -225,6 +252,7 @@ location.reload()
    ```
 
 3. **Ajouter à `sync-manager.js`** pour la synchronisation :
+
    ```javascript
    async syncNewEntity() {
        const entities = await this.api.getNewEntities();

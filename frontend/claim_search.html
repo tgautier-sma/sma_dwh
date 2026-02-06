@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recherche de Sinistres - SMA DWH</title>
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#2563eb">
     <meta name="description" content="Recherche de sinistres - Mode hors ligne disponible">
@@ -45,6 +46,22 @@
             margin: 0;
             color: var(--text-secondary);
             font-size: 14px;
+        }
+        
+        /* Loading spinner styles */
+        #loading-spinner {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        #loading-spinner i {
+            font-size: 48px;
+            color: var(--primary-color);
+        }
+        
+        #loading-spinner p {
+            margin-top: 16px;
+            color: var(--text-secondary);
         }
         
         .search-section {
@@ -290,13 +307,13 @@
         
         <div id="search-results"></div>
         
-        <div id="loading-spinner" style="display: none; text-align: center; padding: 40px;">
-            <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: var(--primary-color);"></i>
-            <p style="margin-top: 16px; color: var(--text-secondary);">Chargement du dossier sinistre...</p>
+        <div id="loading-spinner" class="progress-container">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Chargement du dossier sinistre...</p>
         </div>
         
-        <div id="claim-detail" style="display: none;">
-            <button class="btn btn-secondary" onclick="backToResults()" style="margin-bottom: 20px;">
+        <div id="claim-detail" class="detail-view">
+            <button class="btn btn-secondary back-button" onclick="backToResults()">
                 <i class="fas fa-arrow-left"></i> Retour aux résultats
             </button>
             
@@ -477,8 +494,8 @@
             try {
                 // Afficher le spinner
                 document.getElementById('search-results').style.display = 'none';
-                document.getElementById('claim-detail').style.display = 'none';
-                document.getElementById('loading-spinner').style.display = 'block';
+                document.getElementById('claim-detail').classList.remove('active');
+                document.getElementById('loading-spinner').classList.add('active');
                 
                 const claim = await api.getClaim(claimNumber);
                 
@@ -489,7 +506,7 @@
                 const contract = await api.getContract(contractData.contract_number);
                 
                 if (!contract) {
-                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('loading-spinner').classList.remove('active');
                     document.getElementById('search-results').style.display = 'block';
                     alert('Contrat non trouvé');
                     return;
@@ -498,8 +515,8 @@
                 const client = await api.getClient(contract.client_id);
                 
                 // Masquer le spinner et afficher les détails
-                document.getElementById('loading-spinner').style.display = 'none';
-                document.getElementById('claim-detail').style.display = 'block';
+                document.getElementById('loading-spinner').classList.remove('active');
+                document.getElementById('claim-detail').classList.add('active');
                 
                 displayClaimInfo(claim);
                 displayClientInfo(client);
@@ -508,7 +525,7 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('loading-spinner').classList.remove('active');
                 document.getElementById('search-results').style.display = 'block';
                 alert('Erreur lors du chargement du détail');
             }
@@ -765,12 +782,12 @@
         
         function backToResults() {
             document.getElementById('search-results').style.display = 'block';
-            document.getElementById('claim-detail').style.display = 'none';
+            document.getElementById('claim-detail').classList.remove('active');
         }
         
         function clearSearch() {
             document.getElementById('claim-search-input').value = '';
-            document.getElementById('claim-detail').style.display = 'none';
+            document.getElementById('claim-detail').classList.remove('active');
             loadClaimsList(1);
         }
         

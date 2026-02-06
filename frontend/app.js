@@ -13,14 +13,46 @@ const app = {
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
-    initNavigation();
-    initGlobalSearch();
-    checkAPIStatus();
-    loadDashboard();
+    // Simuler un temps de chargement minimum pour afficher le disclaimer
+    const minLoadingTime = 4000; // 4 secondes minimum
+    const startTime = Date.now();
+    
+    // Initialiser l'application
+    Promise.all([
+        initNavigation(),
+        initGlobalSearch(),
+        checkAPIStatus(),
+        loadDashboard(),
+        // S'assurer que le temps minimum est écoulé
+        new Promise(resolve => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, minLoadingTime - elapsed);
+            setTimeout(resolve, remaining);
+        })
+    ]).then(() => {
+        // Masquer l'écran de chargement avec une transition
+        hideLoadingScreen();
+    }).catch(error => {
+        console.error('Erreur lors de l\'initialisation:', error);
+        // Masquer quand même l'écran de chargement après 5 secondes en cas d'erreur
+        setTimeout(hideLoadingScreen, 5000);
+    });
     
     // Check API status every 30 seconds
     setInterval(checkAPIStatus, 30000);
 });
+
+// Masquer l'écran de chargement
+function hideLoadingScreen() {
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) {
+        loadingScreen.classList.add('hidden');
+        // Supprimer l'élément du DOM après la transition
+        setTimeout(() => {
+            loadingScreen.remove();
+        }, 500);
+    }
+}
 
 // Navigation
 function initNavigation() {
@@ -30,6 +62,21 @@ function initNavigation() {
             if (!view) return; // Skip items without data-view (like external links)
             e.preventDefault();
             switchView(view);
+        });
+    });
+    
+    // Menu dépliable
+    document.querySelectorAll('.nav-group-toggle').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            const group = toggle.closest('.nav-group');
+            const isOpen = group.classList.contains('open');
+            // Fermer tous les menus
+            document.querySelectorAll('.nav-group').forEach(g => g.classList.remove('open'));
+            // Ouvrir celui-ci seulement s'il était fermé
+            if (!isOpen) {
+                group.classList.add('open');
+            }
         });
     });
 }
@@ -57,6 +104,7 @@ function switchView(viewName) {
         history: { title: 'Historique', subtitle: 'Historique des modifications de contrats' },
         generate: { title: 'Génération de données', subtitle: 'Outils de génération et suppression de données' },
         referentials: { title: 'Référentiels', subtitle: 'Gestion des données de référence' },
+        about: { title: 'À propos', subtitle: 'Informations sur l\'application et les technologies utilisées' },
     };
     
     document.getElementById('page-title').textContent = titles[viewName].title;
@@ -157,6 +205,9 @@ async function loadViewData(viewName) {
             break;
         case 'referentials':
             await loadReferentials();
+            break;
+        case 'about':
+            // Page statique, pas de données à charger
             break;
     }
 }
@@ -1067,7 +1118,7 @@ async function filterClaims() {
 // Claim Search View
 function loadClaimSearchView() {
     document.getElementById('claim-search-results').innerHTML = '';
-    document.getElementById('claim-detail-view').style.display = 'none';
+    document.getElementById('claim-detail-view').classList.remove('active');
     document.getElementById('claim-search-input').value = '';
     document.getElementById('claim-search-input').focus();
 }
@@ -1161,7 +1212,7 @@ async function viewClaimDetail(claimNumber) {
         const client = await api.getClient(contract.client_id);
         
         document.getElementById('claim-search-results').style.display = 'none';
-        document.getElementById('claim-detail-view').style.display = 'block';
+        document.getElementById('claim-detail-view').classList.add('active');
         
         displayClaimDetailLeft(claim);
         displayClientSummary(client);
@@ -1337,13 +1388,13 @@ function displayGuaranteesList(contract) {
 
 function backToClaimSearch() {
     document.getElementById('claim-search-results').style.display = 'block';
-    document.getElementById('claim-detail-view').style.display = 'none';
+    document.getElementById('claim-detail-view').classList.remove('active');
 }
 
 function clearClaimSearch() {
     document.getElementById('claim-search-input').value = '';
     document.getElementById('claim-search-results').innerHTML = '';
-    document.getElementById('claim-detail-view').style.display = 'none';
+    document.getElementById('claim-detail-view').classList.remove('active');
 }
 
 async function showClaimModal(claimNumber = null) {
@@ -1366,7 +1417,7 @@ function displayClaimDetail(claim) {
     // Hide table, show detail
     document.getElementById('claims-table-container').style.display = 'none';
     document.querySelector('#claims-view .view-toolbar').style.display = 'none';
-    document.getElementById('claim-detail').style.display = 'block';
+    document.getElementById('claim-detail').classList.add('active');
     
     const statusLabels = {
         'declare': 'Déclaré',
@@ -1627,7 +1678,7 @@ function displayClaimDetail(claim) {
 function backToClaimsList() {
     document.getElementById('claims-table-container').style.display = 'block';
     document.querySelector('#claims-view .view-toolbar').style.display = 'flex';
-    document.getElementById('claim-detail').style.display = 'none';
+    document.getElementById('claim-detail').classList.remove('active');
     app.currentClaim = null;
 }
 
@@ -1971,18 +2022,20 @@ async function generateClaims() {
 async function viewClient(clientId) {
     try {
         const client = await api.getClient(clientId);
-        displayClientDetail(client);
+        // Charger aussi les adresses du client
+        const addresses = await api.getAddresses(clientId);
+        displayClientDetail(client, addresses);
     } catch (error) {
         console.error('Error loading client:', error);
         showToast('error', 'Erreur', 'Impossible de charger les détails du client');
     }
 }
 
-function displayClientDetail(client) {
+function displayClientDetail(client, addresses = []) {
     // Hide table, show detail
     document.getElementById('clients-table-container').style.display = 'none';
     document.querySelector('#clients-view .view-toolbar').style.display = 'none';
-    document.getElementById('client-detail').style.display = 'block';
+    document.getElementById('client-detail').classList.add('active');
     
     const html = `
         <div class="detail-card">
@@ -2085,6 +2138,36 @@ function displayClientDetail(client) {
             ` : ''}
             
             <div class="detail-section">
+                <h3><i class="fas fa-map-marker-alt"></i> Adresses (${addresses.length})</h3>
+                ${addresses.length > 0 ? `
+                    <div class="data-table" style="margin-top: 15px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Adresse</th>
+                                    <th>Code postal</th>
+                                    <th>Ville</th>
+                                    <th>Pays</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${addresses.map(addr => `
+                                    <tr>
+                                        <td><span class="badge badge-info">${addr.address_type || 'N/A'}</span></td>
+                                        <td>${[addr.street_number, addr.street_name].filter(x => x).join(' ') || '-'}</td>
+                                        <td>${addr.postal_code || '-'}</td>
+                                        <td>${addr.city || '-'}</td>
+                                        <td>${addr.country || 'France'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : '<p class="help-text">Aucune adresse enregistrée pour ce client</p>'}
+            </div>
+            
+            <div class="detail-section">
                 <h3><i class="fas fa-clock"></i> Métadonnées</h3>
                 <div class="detail-grid">
                     <div class="detail-item">
@@ -2107,7 +2190,7 @@ function displayClientDetail(client) {
 function backToClientsList() {
     document.getElementById('clients-table-container').style.display = 'block';
     document.querySelector('#clients-view .view-toolbar').style.display = 'flex';
-    document.getElementById('client-detail').style.display = 'none';
+    document.getElementById('client-detail').classList.remove('active');
     app.currentClient = null;
 }
 
@@ -2224,7 +2307,7 @@ async function viewAddress(id) {
 function displayAddressDetail(address) {
     document.getElementById('addresses-table-container').style.display = 'none';
     document.querySelector('#addresses-view .view-toolbar').style.display = 'none';
-    document.getElementById('address-detail').style.display = 'block';
+    document.getElementById('address-detail').classList.add('active');
     
     const html = `
         <div class="detail-card">
@@ -2308,7 +2391,7 @@ function displayAddressDetail(address) {
 function backToAddressesList() {
     document.getElementById('addresses-table-container').style.display = 'block';
     document.querySelector('#addresses-view .view-toolbar').style.display = 'flex';
-    document.getElementById('address-detail').style.display = 'none';
+    document.getElementById('address-detail').classList.remove('active');
 }
 
 function editAddress(id) { showToast('info', 'Info', 'Fonctionnalité en cours de développement'); }
@@ -2328,7 +2411,7 @@ async function viewSite(id) {
 function displaySiteDetail(site) {
     document.getElementById('sites-table-container').style.display = 'none';
     document.querySelector('#sites-view .view-toolbar').style.display = 'none';
-    document.getElementById('site-detail').style.display = 'block';
+    document.getElementById('site-detail').classList.add('active');
     
     const html = `
         <div class="detail-card">
@@ -2534,7 +2617,7 @@ function displaySiteDetail(site) {
 function backToSitesList() {
     document.getElementById('sites-table-container').style.display = 'block';
     document.querySelector('#sites-view .view-toolbar').style.display = 'flex';
-    document.getElementById('site-detail').style.display = 'none';
+    document.getElementById('site-detail').classList.remove('active');
 }
 
 function editSite(id) { showToast('info', 'Info', 'Fonctionnalité en cours de développement'); }
@@ -2585,7 +2668,7 @@ function getGuaranteeName(code) {
 function displayContractDetail(contract) {
     document.getElementById('contracts-table-container').style.display = 'none';
     document.querySelector('#contracts-view .view-toolbar').style.display = 'none';
-    document.getElementById('contract-detail').style.display = 'block';
+    document.getElementById('contract-detail').classList.add('active');
     
     const html = `
         <div class="detail-card" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
@@ -2786,7 +2869,7 @@ function displayContractDetail(contract) {
 function backToContractsList() {
     document.getElementById('contracts-table-container').style.display = 'block';
     document.querySelector('#contracts-view .view-toolbar').style.display = 'flex';
-    document.getElementById('contract-detail').style.display = 'none';
+    document.getElementById('contract-detail').classList.remove('active');
 }
 
 function editContract(number) { showToast('info', 'Info', 'Fonctionnalité en cours de développement'); }

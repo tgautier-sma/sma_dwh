@@ -7,6 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Gestion Assurance Construction - SMA DWH</title>
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#2563eb">
     <meta name="description" content="Application de gestion des sinistres construction - Mode hors ligne disponible">
@@ -17,25 +18,55 @@
     <script src="/static/db-manager.js"></script>
 </head>
 <body>
+    <!-- Page de chargement avec disclaimer -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <i class="fas fa-building"></i>
+            </div>
+            <h1>SMA DWH</h1>
+            <p class="loading-subtitle">Gestion Assurance Construction</p>
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+            <div class="loading-disclaimer">
+                <div class="disclaimer-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3>⚠️ Données d'Exemple</h3>
+                <p>
+                    Les données affichées dans cette application sont <strong>purement fictives</strong> 
+                    et ont été générées automatiquement à l'aide d'un générateur de données synthétiques.
+                </p>
+                <p>
+                    <strong>Ces données ne doivent pas être utilisées à des fins réelles.</strong>
+                </p>
+                <p class="disclaimer-note">
+                    Cette démonstration est destinée uniquement à illustrer les fonctionnalités de l'application.
+                </p>
+            </div>
+        </div>
+    </div>
+    
     <!-- Modale de téléchargement hors ligne -->
-    <div id="offline-download-modal" class="modal-overlay" style="display: none;">
-        <div class="modal" style="max-width: 500px;">
+    <div id="offline-download-modal" class="modal-overlay">
+        <div class="modal offline-modal">
             <div class="modal-header">
                 <h3><i class="fas fa-download"></i> Téléchargement pour mode hors ligne</h3>
             </div>
             <div class="modal-body">
-                <p style="margin-bottom: 20px;">
+                <p class="modal-description">
                     Pour utiliser l'application sans connexion Internet, téléchargez toutes les données maintenant.
                 </p>
-                <div id="download-progress-container" style="display: none;">
-                    <div class="progress-info" style="margin-bottom: 10px; display: flex; justify-content: space-between;">
+                <div id="download-progress-container">
+                    <div class="progress-info">
                         <span id="download-progress-text">Préparation...</span>
                         <span id="download-progress-percent">0%</span>
                     </div>
-                    <div class="progress-bar" style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
-                        <div id="download-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #2563eb); transition: width 0.3s ease;"></div>
+                    <div class="progress-bar">
+                        <div id="download-progress-bar"></div>
                     </div>
-                    <div id="download-stats" style="margin-top: 15px; padding: 10px; background: #f3f4f6; border-radius: 4px; font-size: 0.9em; display: none;"></div>
+                    <div id="download-stats"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -45,7 +76,7 @@
                 <button id="btn-skip-download" class="btn btn-secondary">
                     Plus tard
                 </button>
-                <button id="btn-close-download" class="btn btn-secondary" style="display: none;">
+                <button id="btn-close-download" class="btn btn-secondary">
                     Fermer
                 </button>
             </div>
@@ -65,48 +96,70 @@
                     <i class="fas fa-dashboard"></i>
                     <span>Tableau de bord</span>
                 </a>
-                <a href="#" class="nav-item" data-view="clients">
-                    <i class="fas fa-users"></i>
-                    <span>Clients</span>
-                </a>
-                <a href="#" class="nav-item" data-view="addresses">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <span>Adresses</span>
-                </a>
-                <a href="#" class="nav-item" data-view="sites">
-                    <i class="fas fa-hard-hat"></i>
-                    <span>Chantiers</span>
-                </a>
-                <a href="#" class="nav-item" data-view="contracts">
-                    <i class="fas fa-file-contract"></i>
-                    <span>Contrats</span>
-                </a>
-                <a href="#" class="nav-item" data-view="claims">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Sinistres</span>
-                </a>
-                <a href="#" class="nav-item" data-view="history">
-                    <i class="fas fa-history"></i>
-                    <span>Historique</span>
-</a>
+                <div class="nav-group open">
+                    <a href="#" class="nav-item nav-group-toggle">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Assurance</span>
+                        <i class="fas fa-chevron-down nav-group-arrow"></i>
+                    </a>
+                    <div class="nav-group-items">
+                        <a href="#" class="nav-item nav-sub-item" data-view="clients">
+                            <i class="fas fa-users"></i>
+                            <span>Clients</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="addresses">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Adresses</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="sites">
+                            <i class="fas fa-hard-hat"></i>
+                            <span>Chantiers</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="contracts">
+                            <i class="fas fa-file-contract"></i>
+                            <span>Contrats</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="claims">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Sinistres</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="history">
+                            <i class="fas fa-history"></i>
+                            <span>Historique</span>
+                        </a>
+                    </div>
+                </div>
                 <a href="/static/claim_search.html" class="nav-item" target="_blank">
                     <i class="fas fa-search"></i>
                     <span>Recherche sinistres</span>
-                    <i class="fas fa-external-link-alt" style="margin-left: auto; font-size: 0.8em; opacity: 0.6;"></i>
-                </a>
-                <a href="#" class="nav-item" data-view="generate">
-                    <i class="fas fa-magic"></i>
-                    <span>Génération de données</span>
+                    <i class="fas fa-external-link-alt external-link-icon"></i>
                 </a>
                 <a href="#" class="nav-item" data-view="referentials">
                     <i class="fas fa-database"></i>
                     <span>Référentiels</span>
                 </a>
-                <a href="/docs" class="nav-item" target="_blank">
-                    <i class="fas fa-book"></i>
-                    <span>Documentation API</span>
-                    <i class="fas fa-external-link-alt" style="margin-left: auto; font-size: 0.8em; opacity: 0.6;"></i>
-                </a>
+                <div class="nav-group">
+                    <a href="#" class="nav-item nav-group-toggle">
+                        <i class="fas fa-question-circle"></i>
+                        <span>Aide</span>
+                        <i class="fas fa-chevron-down nav-group-arrow"></i>
+                    </a>
+                    <div class="nav-group-items">
+                        <a href="#" class="nav-item nav-sub-item" data-view="generate">
+                            <i class="fas fa-magic"></i>
+                            <span>Génération de données</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="about">
+                            <i class="fas fa-info-circle"></i>
+                            <span>À propos</span>
+                        </a>
+                        <a href="/docs" class="nav-item nav-sub-item" target="_blank">
+                            <i class="fas fa-book"></i>
+                            <span>Documentation API</span>
+                            <i class="fas fa-external-link-alt external-link-icon"></i>
+                        </a>
+                    </div>
+                </div>
             </nav>
             
             <div class="sidebar-footer">
@@ -114,7 +167,7 @@
                     <i class="fas fa-circle" id="api-status-icon"></i>
                     <span id="api-status-text">Vérification...</span>
                 </div>
-                <button id="btn-sync-offline" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 10px;" title="Télécharger les données pour le mode hors ligne">
+                <button id="btn-sync-offline" class="btn btn-sm btn-secondary" title="Télécharger les données pour le mode hors ligne">
                     <i class="fas fa-download"></i> Mode hors ligne
                 </button>
             </div>
@@ -144,7 +197,7 @@
                 <!-- Dashboard View -->
                 <div id="dashboard-view" class="view active">
                     <div class="stats-grid">
-                        <div class="stat-card">
+                        <div class="stat-card" data-view="clients">
                             <div class="stat-icon bg-blue">
                                 <i class="fas fa-users"></i>
                             </div>
@@ -153,7 +206,7 @@
                                 <p>Clients</p>
                             </div>
                         </div>
-                        <div class="stat-card">
+                        <div class="stat-card" data-view="addresses">
                             <div class="stat-icon bg-green">
                                 <i class="fas fa-map-marker-alt"></i>
                             </div>
@@ -162,7 +215,7 @@
                                 <p>Adresses</p>
                             </div>
                         </div>
-                        <div class="stat-card">
+                        <div class="stat-card" data-view="sites">
                             <div class="stat-icon bg-orange">
                                 <i class="fas fa-hard-hat"></i>
                             </div>
@@ -171,7 +224,7 @@
                                 <p>Chantiers</p>
                             </div>
                         </div>
-                        <div class="stat-card">
+                        <div class="stat-card" data-view="contracts">
                             <div class="stat-icon bg-purple">
                                 <i class="fas fa-file-contract"></i>
                             </div>
@@ -180,7 +233,7 @@
                                 <p>Contrats</p>
                             </div>
                         </div>
-                        <div class="stat-card">
+                        <div class="stat-card" data-view="claims">
                             <div class="stat-icon bg-red">
                                 <i class="fas fa-exclamation-triangle"></i>
                             </div>
@@ -210,7 +263,7 @@
                             <i class="fas fa-plus"></i> Nouveau client
                         </button>
                         <div class="toolbar-filters">
-                            <select id="client-type-filter">
+                            <select id="client-type-filter" aria-label="Filtrer par type de client">
                                 <option value="">Tous les types</option>
                                 <option value="particulier">Particulier</option>
                                 <option value="professionnel">Professionnel</option>
@@ -224,7 +277,7 @@
                     <div id="clients-table-container"></div>
                     
                     <!-- Client Detail View -->
-                    <div id="client-detail" style="display: none;">
+                    <div id="client-detail" class="detail-view">
                         <div class="view-toolbar">
                             <button class="btn btn-secondary" onclick="backToClientsList()">
                                 <i class="fas fa-arrow-left"></i> Retour à la liste
@@ -244,7 +297,7 @@
                             <i class="fas fa-map"></i> Voir sur la carte
                         </button>
                         <div class="toolbar-filters">
-                            <select id="address-type-filter">
+                            <select id="address-type-filter" aria-label="Filtrer par type d'adresse">
                                 <option value="">Tous les types</option>
                                 <option value="siege_social">Siège social</option>
                                 <option value="entrepot">Entrepôt</option>
@@ -259,7 +312,7 @@
                     <div id="addresses-table-container"></div>
                     
                     <!-- Address Detail View -->
-                    <div id="address-detail" style="display: none;">
+                    <div id="address-detail" class="detail-view">
                         <div class="view-toolbar">
                             <button class="btn btn-secondary" onclick="backToAddressesList()">
                                 <i class="fas fa-arrow-left"></i> Retour à la liste
@@ -279,7 +332,7 @@
                             <i class="fas fa-map"></i> Voir la carte
                         </button>
                         <div class="toolbar-filters">
-                            <select id="site-building-filter">
+                            <select id="site-building-filter" aria-label="Filtrer par catégorie de bâtiment">
                                 <option value="">Toutes les catégories</option>
                                 <option value="HAB-IND">Habitation individuelle</option>
                                 <option value="HAB-COL">Habitation collective</option>
@@ -292,7 +345,7 @@
                                 <option value="IGH">IGH</option>
                                 <option value="OAR">Ouvrage d'art</option>
                             </select>
-                            <select id="site-work-filter">
+                            <select id="site-work-filter" aria-label="Filtrer par catégorie de travaux">
                                 <option value="">Tous les travaux</option>
                                 <option value="CONST-NEUF">Construction neuve</option>
                                 <option value="EXT">Extension</option>
@@ -312,7 +365,7 @@
                     <div id="sites-table-container"></div>
                     
                     <!-- Site Detail View -->
-                    <div id="site-detail" style="display: none;">
+                    <div id="site-detail" class="detail-view">
                         <div class="view-toolbar">
                             <button class="btn btn-secondary" onclick="backToSitesList()">
                                 <i class="fas fa-arrow-left"></i> Retour à la liste
@@ -329,7 +382,7 @@
                             <i class="fas fa-plus"></i> Nouveau contrat
                         </button>
                         <div class="toolbar-filters">
-                            <select id="contract-type-filter">
+                            <select id="contract-type-filter" aria-label="Filtrer par type de contrat">
                                 <option value="">Tous les types</option>
                                 <option value="RC-DEC">RC Décennale</option>
                                 <option value="RC-PRO">RC Pro</option>
@@ -337,7 +390,7 @@
                                 <option value="DOM">Dommages Ouvrage</option>
                                 <option value="CNR">CNR</option>
                             </select>
-                            <select id="contract-status-filter">
+                            <select id="contract-status-filter" aria-label="Filtrer par statut de contrat">
                                 <option value="">Tous les statuts</option>
                                 <option value="brouillon">Brouillon</option>
                                 <option value="en_attente">En attente</option>
@@ -356,7 +409,7 @@
                     <div id="contracts-table-container"></div>
                     
                     <!-- Contract Detail View -->
-                    <div id="contract-detail" style="display: none;">
+                    <div id="contract-detail" class="detail-view">
                         <div class="view-toolbar">
                             <button class="btn btn-secondary" onclick="backToContractsList()">
                                 <i class="fas fa-arrow-left"></i> Retour à la liste
@@ -373,7 +426,7 @@
                             <i class="fas fa-plus"></i> Nouveau sinistre
                         </button>
                         <div class="toolbar-filters">
-                            <select id="claim-status-filter" onchange="filterClaims()">
+                            <select id="claim-status-filter" onchange="filterClaims()" aria-label="Filtrer par statut de sinistre">
                                 <option value="">Tous les statuts</option>
                                 <option value="declare">Déclaré</option>
                                 <option value="pris_en_compte">Pris en compte</option>
@@ -384,7 +437,7 @@
                                 <option value="regle">Réglé</option>
                                 <option value="cloture">Clôturé</option>
                             </select>
-                            <select id="claim-type-filter" onchange="filterClaims()">
+                            <select id="claim-type-filter" onchange="filterClaims()" aria-label="Filtrer par type de sinistre">
                                 <option value="">Tous les types</option>
                                 <option value="structurel">Structurel</option>
                                 <option value="degats_des_eaux">Dégâts des eaux</option>
@@ -401,7 +454,7 @@
                     <div id="claims-table-container"></div>
                     
                     <!-- Claim Detail View -->
-                    <div id="claim-detail" style="display: none;">
+                    <div id="claim-detail" class="detail-view">
                         <div class="view-toolbar">
                             <button class="btn btn-secondary" onclick="backToClaimsList()">
                                 <i class="fas fa-arrow-left"></i> Retour à la liste
@@ -419,13 +472,13 @@
                         <h2>Recherche de sinistres</h2>
                     </div>
                     
-                    <div class="search-section" style="background: var(--bg-primary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <div style="display: flex; gap: 12px; align-items: center;">
-                            <input type="text" id="claim-search-input" placeholder="Rechercher par numéro de sinistre, titre..." style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+                    <div class="search-section">
+                        <div class="search-flex">
+                            <input type="text" id="claim-search-input" placeholder="Rechercher par numéro de sinistre, titre..." class="search-input">
                             <button class="btn btn-primary" onclick="searchClaimsAdvanced()">
                                 <i class="fas fa-search"></i> Rechercher
                             </button>
-                            <button class="btn btn-secondary" onclick="clearClaimSearch()">
+                            <button class="btn btn-secondary" onclick="clearClaimSearch()" title="Effacer la recherche">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -433,16 +486,16 @@
                     
                     <div id="claim-search-results"></div>
                     
-                    <div id="claim-detail-view" style="display: none;">
-                        <button class="btn btn-secondary" onclick="backToClaimSearch()" style="margin-bottom: 16px;">
+                    <div id="claim-detail-view" class="detail-view">
+                        <button class="btn btn-secondary back-button" onclick="backToClaimSearch()">
                             <i class="fas fa-arrow-left"></i> Retour aux résultats
                         </button>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            <div id="claim-detail-left" style="background: var(--bg-primary); padding: 20px; border-radius: 8px;"></div>
+                        <div class="detail-grid-2col">
+                            <div id="claim-detail-left" class="detail-panel"></div>
                             <div id="claim-detail-right">
-                                <div id="claim-client-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
-                                <div id="claim-contract-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
-                                <div id="claim-guarantees-list" style="background: var(--bg-primary); padding: 16px; border-radius: 8px;"></div>
+                                <div id="claim-client-summary" class="detail-panel-sm"></div>
+                                <div id="claim-contract-summary" class="detail-panel-sm"></div>
+                                <div id="claim-guarantees-list" class="detail-panel-sm"></div>
                             </div>
                         </div>
                     </div>
@@ -453,13 +506,13 @@
                         <h2>Recherche de sinistres</h2>
                     </div>
                     
-                    <div class="search-section" style="background: var(--bg-primary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <div style="display: flex; gap: 12px; align-items: center;">
-                            <input type="text" id="claim-search-input" placeholder="Rechercher par numéro de sinistre, nom du client..." style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+                    <div class="search-section">
+                        <div class="search-flex">
+                            <input type="text" id="claim-search-input-2" placeholder="Rechercher par numéro de sinistre, nom du client..." class="search-input">
                             <button class="btn btn-primary" onclick="searchClaimsAdvanced()">
                                 <i class="fas fa-search"></i> Rechercher
                             </button>
-                            <button class="btn btn-secondary" onclick="clearClaimSearch()">
+                            <button class="btn btn-secondary" onclick="clearClaimSearch()" title="Effacer la recherche">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -467,16 +520,16 @@
                     
                     <div id="claim-search-results"></div>
                     
-                    <div id="claim-detail-view" style="display: none;">
-                        <button class="btn btn-secondary" onclick="backToClaimSearch()" style="margin-bottom: 16px;">
+                    <div id="claim-detail-view" class="detail-view">
+                        <button class="btn btn-secondary back-button" onclick="backToClaimSearch()">
                             <i class="fas fa-arrow-left"></i> Retour aux résultats
                         </button>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            <div id="claim-detail-left" style="background: var(--bg-primary); padding: 20px; border-radius: 8px;"></div>
+                        <div class="detail-grid-2col">
+                            <div id="claim-detail-left" class="detail-panel"></div>
                             <div id="claim-detail-right">
-                                <div id="claim-client-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
-                                <div id="claim-contract-summary" style="background: var(--bg-primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;"></div>
-                                <div id="claim-guarantees-list" style="background: var(--bg-primary); padding: 16px; border-radius: 8px;"></div>
+                                <div id="claim-client-summary" class="detail-panel-sm"></div>
+                                <div id="claim-contract-summary" class="detail-panel-sm"></div>
+                                <div id="claim-guarantees-list" class="detail-panel-sm"></div>
                             </div>
                         </div>
                     </div>
@@ -486,7 +539,7 @@
                 <div id="history-view" class="view">
                     <div class="view-toolbar">
                         <div class="toolbar-filters">
-                            <select id="history-action-filter">
+                            <select id="history-action-filter" aria-label="Filtrer par type d'action">
                                 <option value="">Toutes les actions</option>
                                 <option value="creation">Création</option>
                                 <option value="modification">Modification</option>
@@ -532,7 +585,7 @@
                                 <i class="fas fa-magic"></i> Générer les données
                             </button>
 
-                            <div id="generate-progress" class="progress-container" style="display: none;">
+                            <div id="generate-progress" class="progress-container">
                                 <div class="progress-bar">
                                     <div class="progress-fill"></div>
                                 </div>
@@ -610,6 +663,194 @@
                     </div>
                 </div>
             </div>
+
+            <!-- About View -->
+            <div id="about-view" class="view">
+                <div class="about-page">
+                    <!-- Disclaimer -->
+                    <div class="about-disclaimer">
+                        <div class="about-disclaimer-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <h3>⚠️ Données d'Exemple</h3>
+                        <p>
+                            Les données affichées dans cette application sont <strong>purement fictives</strong>
+                            et ont été générées automatiquement à l'aide d'un générateur de données synthétiques
+                            (<strong>Faker</strong> pour Python).
+                        </p>
+                        <p>
+                            <strong>Ces données ne doivent en aucun cas être utilisées à des fins réelles.</strong>
+                            Elles sont destinées uniquement à illustrer les fonctionnalités de l'application.
+                        </p>
+                        <p class="about-disclaimer-note">
+                            Tous les noms, adresses, numéros de contrats et sinistres sont entièrement fictifs.
+                            Toute ressemblance avec des personnes, entreprises ou situations réelles serait purement fortuite.
+                        </p>
+                    </div>
+
+                    <div class="about-grid">
+                        <!-- Frontend -->
+                        <div class="about-card">
+                            <div class="about-card-header">
+                                <i class="fas fa-laptop-code"></i>
+                                <h3>Frontend (Client)</h3>
+                            </div>
+                            <div class="about-card-body">
+                                <div class="about-tech-list">
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fab fa-html5"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>HTML5 / CSS3 / JavaScript</strong>
+                                            <span>Vanilla JS – Aucun framework frontend</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-mobile-alt"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Progressive Web App (PWA)</strong>
+                                            <span>Service Worker, IndexedDB, Manifest</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-map"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Leaflet 1.9.4</strong>
+                                            <span>Cartographie interactive (OpenStreetMap)</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-icons"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Font Awesome 6.4</strong>
+                                            <span>Bibliothèque d'icônes</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-database"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>IndexedDB</strong>
+                                            <span>Stockage local pour le mode hors ligne</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-sync-alt"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Synchronisation automatique</strong>
+                                            <span>Sync bidirectionnelle toutes les 5 min</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Backend -->
+                        <div class="about-card">
+                            <div class="about-card-header">
+                                <i class="fas fa-server"></i>
+                                <h3>Backend (Serveur)</h3>
+                            </div>
+                            <div class="about-card-body">
+                                <div class="about-tech-list">
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fab fa-python"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Python 3.11+</strong>
+                                            <span>Langage principal du serveur</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-bolt"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>FastAPI 0.115</strong>
+                                            <span>Framework web asynchrone hautes performances</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-rocket"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Uvicorn 0.32</strong>
+                                            <span>Serveur ASGI (HTTP/WebSocket)</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-check-circle"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Pydantic 2.9</strong>
+                                            <span>Validation des données et sérialisation</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-layer-group"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>SQLAlchemy 2.0</strong>
+                                            <span>ORM et gestion de la base de données</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-database"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>PostgreSQL</strong>
+                                            <span>Base de données relationnelle (psycopg2)</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-random"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Faker 30.8</strong>
+                                            <span>Génération de données fictives réalistes</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Infrastructure -->
+                        <div class="about-card">
+                            <div class="about-card-header">
+                                <i class="fas fa-cloud"></i>
+                                <h3>Infrastructure</h3>
+                            </div>
+                            <div class="about-card-body">
+                                <div class="about-tech-list">
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fab fa-docker"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Docker</strong>
+                                            <span>Conteneurisation de l'application</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-network-wired"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Docker Compose</strong>
+                                            <span>Orchestration multi-conteneurs</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-shield-alt"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>HTTPS / TLS</strong>
+                                            <span>Communication sécurisée via proxy</span>
+                                        </div>
+                                    </div>
+                                    <div class="about-tech-item">
+                                        <div class="about-tech-icon"><i class="fas fa-book-open"></i></div>
+                                        <div class="about-tech-info">
+                                            <strong>Swagger / OpenAPI</strong>
+                                            <span>Documentation API auto-générée</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="about-footer">
+                        <p>SMA DWH — Application de démonstration — Version 1.0.0</p>
+                        <p>Développée avec <i class="fas fa-heart about-heart"></i> et <i class="fab fa-github"></i> GitHub Copilot</p>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -618,7 +859,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="modal-title">Modal Title</h3>
-                <button class="modal-close" onclick="closeModal()">
+                <button class="modal-close" onclick="closeModal()" title="Fermer">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -640,12 +881,12 @@
         <div class="modal modal-large">
             <div class="modal-header">
                 <h3 id="map-modal-title">Carte des adresses</h3>
-                <button class="modal-close" onclick="closeMapModal()">
+                <button class="modal-close" onclick="closeMapModal()" title="Fermer la carte">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body" style="padding: 0;">
-                <div id="addresses-map" style="height: 70vh; width: 100%;"></div>
+            <div class="modal-body modal-body-nopadding">
+                <div id="addresses-map" class="map-container"></div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeMapModal()">Fermer</button>
@@ -694,10 +935,10 @@
             if (btnSyncOffline) {
                 if (!navigator.onLine) {
                     btnSyncOffline.classList.remove('btn-secondary');
-                    btnSyncOffline.classList.add('btn-success');
-                    btnSyncOffline.innerHTML = '<i class="fas fa-check-circle"></i> Mode hors ligne actif';
+                    btnSyncOffline.classList.add('btn-danger');
+                    btnSyncOffline.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Mode hors ligne actif';
                 } else {
-                    btnSyncOffline.classList.remove('btn-success');
+                    btnSyncOffline.classList.remove('btn-danger');
                     btnSyncOffline.classList.add('btn-secondary');
                     btnSyncOffline.innerHTML = '<i class="fas fa-download"></i> Mode hors ligne';
                 }
@@ -767,18 +1008,19 @@
             const btnSkip = document.getElementById('btn-skip-download');
             const btnClose = document.getElementById('btn-close-download');
             
-            modal.style.display = 'flex';
-            progressContainer.style.display = 'none';
+            modal.classList.add('active');
+            progressContainer.classList.remove('active');
             btnStart.style.display = 'inline-block';
             btnSkip.style.display = 'inline-block';
             btnClose.style.display = 'none';
         };
         
         window.closeOfflineDownloadModal = function() {
-            document.getElementById('offline-download-modal').style.display = 'none';
+            document.getElementById('offline-download-modal').classList.remove('active');
         };
         
         window.startOfflineDownload = async function() {
+            const modal = document.getElementById('offline-download-modal');
             const progressContainer = document.getElementById('download-progress-container');
             const btnStart = document.getElementById('btn-start-download');
             const btnSkip = document.getElementById('btn-skip-download');
@@ -788,8 +1030,9 @@
             const progressPercent = document.getElementById('download-progress-percent');
             const downloadStats = document.getElementById('download-stats');
             
-            // Afficher la barre de progression
-            progressContainer.style.display = 'block';
+            // Afficher la modale et la barre de progression
+            modal.classList.add('active');
+            progressContainer.classList.add('active');
             btnStart.style.display = 'none';
             btnSkip.style.display = 'none';
             
@@ -816,7 +1059,7 @@
                 
                 // Afficher les statistiques après téléchargement
                 if (finalStats) {
-                    downloadStats.style.display = 'block';
+                    downloadStats.classList.add('active');
                     downloadStats.innerHTML = `
                         <strong>Téléchargement terminé !</strong><br>
                         📊 <strong>${finalStats.claims || 0}</strong> sinistres<br>
@@ -862,6 +1105,29 @@
             
             // Initialiser l'état du bouton au chargement
             updateOnlineStatus();
+            
+            // Rendre les cartes du dashboard cliquables
+            document.querySelectorAll('.stat-card[data-view]').forEach(card => {
+                card.addEventListener('click', function() {
+                    const view = this.getAttribute('data-view');
+                    // Cliquer sur l'élément de navigation correspondant
+                    const navItem = document.querySelector(`.nav-item[data-view="${view}"]`);
+                    if (navItem) {
+                        navItem.click();
+                    }
+                });
+                
+                // Ajouter un effet hover
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-4px)';
+                    this.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.15)';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = '';
+                    this.style.boxShadow = '';
+                });
+            });
         });
     </script>
 </body>
