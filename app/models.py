@@ -1527,3 +1527,26 @@ class ClaimModel(Base):
     def is_open(self):
         """Vérifie si le sinistre est toujours ouvert"""
         return self.status not in [ClaimStatusEnum.SETTLED.value, ClaimStatusEnum.CLOSED.value, ClaimStatusEnum.REJECTED.value]
+
+
+# =============================================================================
+# DIAGRAMMES MERMAID
+# =============================================================================
+
+class MermaidDiagram(Base):
+    """Modèle pour stocker les diagrammes Mermaid"""
+    __tablename__ = "mermaid_diagrams"
+    
+    id = Column(String(50), primary_key=True, index=True)
+    title = Column(String(200), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    diagram_type = Column(String(50), nullable=False)  # flowchart, sequence, class, etc.
+    content = Column(Text, nullable=False)  # Code Mermaid
+    tags = Column(JSON, nullable=True)  # Liste de tags pour catégorisation
+    is_public = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_by = Column(String(100), nullable=True)
+    
+    def __repr__(self):
+        return f"<MermaidDiagram(id={self.id}, title={self.title})>"

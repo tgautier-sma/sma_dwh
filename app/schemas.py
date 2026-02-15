@@ -658,3 +658,42 @@ class Claim(ClaimBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# SCHÉMAS DIAGRAMMES MERMAID
+# =============================================================================
+
+class MermaidDiagramBase(BaseModel):
+    """Schéma de base pour un diagramme Mermaid"""
+    title: str = Field(..., description="Titre du diagramme", min_length=1, max_length=200)
+    description: Optional[str] = Field(None, description="Description du diagramme")
+    diagram_type: str = Field(..., description="Type de diagramme (flowchart, sequence, class, etc.)")
+    content: str = Field(..., description="Code Mermaid du diagramme", min_length=1)
+    tags: Optional[List[str]] = Field(None, description="Tags pour catégorisation")
+    is_public: bool = Field(True, description="Diagramme public ou privé")
+    created_by: Optional[str] = Field(None, description="Créateur du diagramme")
+
+
+class MermaidDiagramCreate(MermaidDiagramBase):
+    """Schéma pour créer un diagramme"""
+    pass
+
+
+class MermaidDiagramUpdate(BaseModel):
+    """Schéma pour mettre à jour un diagramme"""
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    diagram_type: Optional[str] = None
+    content: Optional[str] = Field(None, min_length=1)
+    tags: Optional[List[str]] = None
+    is_public: Optional[bool] = None
+
+
+class MermaidDiagram(MermaidDiagramBase):
+    """Schéma complet d'un diagramme"""
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

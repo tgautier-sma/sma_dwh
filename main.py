@@ -13,7 +13,7 @@ import os
 
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import clients, contracts, sites, referentials, addresses, history, claims
+from app.routers import clients, contracts, sites, referentials, addresses, history, claims, diagrams
 
 
 @asynccontextmanager
@@ -71,6 +71,7 @@ app.include_router(sites.router)
 app.include_router(referentials.router)
 app.include_router(history.router)
 app.include_router(claims.router)
+app.include_router(diagrams.router)
 
 # Montage des fichiers statiques pour le front-end
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
@@ -91,6 +92,16 @@ def root():
         "frontend": "Frontend files not found. Access API docs at /docs",
         "status": "operational"
     }
+
+
+@app.get("/diagram-editor", tags=["Root"])
+@app.get("/diagram-editor/", tags=["Root"])
+def diagram_editor():
+    """Serve the Mermaid diagram editor"""
+    editor_path = os.path.join(frontend_path, "diagram_editor.html")
+    if os.path.exists(editor_path):
+        return FileResponse(editor_path)
+    raise HTTPException(status_code=404, detail="Diagram editor not found")
 
 
 @app.get("/health", tags=["Health"])
