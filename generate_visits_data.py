@@ -24,7 +24,11 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 from faker import Faker
 
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
+
+# Le moteur applicatif logue chaque requête SQL (utile pour l'API, inutile et très
+# coûteux ici vu le volume de requêtes générées par ce script en masse).
+engine.echo = False
 from app.models import (
     SalesRepModel, ClientVisitModel, InsuranceProposalModel,
     ClientModel, ConstructionSiteModel,
