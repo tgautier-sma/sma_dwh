@@ -261,6 +261,8 @@ class ClientContractBase(BaseModel):
     contract_type_code: str
     client_id: int
     construction_site_id: Optional[int] = None
+    sales_rep_id: Optional[int] = Field(None, description="Commercial à l'origine de la souscription")
+    originating_visit_id: Optional[int] = Field(None, description="Visite ayant conduit à la souscription")
     status: ContractStatusEnum = ContractStatusEnum.DRAFT
     issue_date: Optional[date] = None
     effective_date: Optional[date] = None
@@ -654,6 +656,167 @@ class Claim(ClaimBase):
     internal_notes: Optional[str] = None
     expert_conclusions: Optional[str] = None
     rejection_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# SCHÉMAS RÉSEAU COMMERCIAL - VISITES - PROPOSITIONS
+# =============================================================================
+
+class VisitTypeEnum(str, Enum):
+    PROSPECTION = "prospection"
+    DECOUVERTE_BESOINS = "decouverte_besoins"
+    SUIVI_CONTRAT = "suivi_contrat"
+    RENOUVELLEMENT = "renouvellement"
+    GESTION_SINISTRE = "gestion_sinistre"
+    FIDELISATION = "fidelisation"
+    SOUSCRIPTION = "souscription"
+
+
+class VisitStatusEnum(str, Enum):
+    PLANIFIEE = "planifiee"
+    REALISEE = "realisee"
+    ANNULEE = "annulee"
+    REPORTEE = "reportee"
+    ABSENCE_CLIENT = "absence_client"
+
+
+class ProposalStatusEnum(str, Enum):
+    BROUILLON = "brouillon"
+    ENVOYEE = "envoyee"
+    EN_REFLEXION = "en_reflexion"
+    ACCEPTEE = "acceptee"
+    REFUSEE = "refusee"
+    EXPIREE = "expiree"
+    SANS_SUITE = "sans_suite"
+
+
+class SalesRepBase(BaseModel):
+    """Schéma de base pour un commercial"""
+    employee_number: str = Field(..., description="Matricule unique du commercial")
+    civility: Optional[str] = None
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    mobile: Optional[str] = None
+    region: Optional[str] = None
+    agency: Optional[str] = None
+    manager_name: Optional[str] = None
+    hire_date: Optional[date] = None
+    is_active: bool = True
+    notes: Optional[str] = None
+
+
+class SalesRepCreate(SalesRepBase):
+    pass
+
+
+class SalesRepUpdate(BaseModel):
+    civility: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    mobile: Optional[str] = None
+    region: Optional[str] = None
+    agency: Optional[str] = None
+    manager_name: Optional[str] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class SalesRep(SalesRepBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClientVisitBase(BaseModel):
+    """Schéma de base pour une visite client"""
+    visit_number: str = Field(..., description="Numéro unique de la visite")
+    sales_rep_id: int = Field(..., description="Commercial ayant réalisé la visite")
+    client_id: int = Field(..., description="Client visité")
+    address_id: Optional[int] = None
+    visit_date: datetime
+    duration_minutes: Optional[int] = None
+    visit_type: VisitTypeEnum
+    visit_status: VisitStatusEnum = VisitStatusEnum.REALISEE
+    objective: Optional[str] = None
+    report_summary: Optional[str] = Field(None, description="Compte rendu de la visite")
+    topics_discussed: Optional[List[str]] = None
+    client_satisfaction: Optional[int] = Field(None, ge=1, le=5)
+    next_action: Optional[str] = None
+    next_visit_date: Optional[date] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class ClientVisitCreate(ClientVisitBase):
+    pass
+
+
+class ClientVisitUpdate(BaseModel):
+    visit_status: Optional[VisitStatusEnum] = None
+    duration_minutes: Optional[int] = None
+    report_summary: Optional[str] = None
+    topics_discussed: Optional[List[str]] = None
+    client_satisfaction: Optional[int] = Field(None, ge=1, le=5)
+    next_action: Optional[str] = None
+    next_visit_date: Optional[date] = None
+
+
+class ClientVisit(ClientVisitBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InsuranceProposalBase(BaseModel):
+    """Schéma de base pour une proposition d'assurance"""
+    proposal_number: str = Field(..., description="Numéro unique de la proposition")
+    visit_id: Optional[int] = None
+    client_id: int
+    sales_rep_id: int
+    construction_site_id: Optional[int] = None
+    contract_type_code: str = Field(..., description="Code produit du référentiel (DO, RCD, TRC, CNR, RCMO, PUC)")
+    proposal_date: date
+    validity_date: Optional[date] = None
+    status: ProposalStatusEnum = ProposalStatusEnum.ENVOYEE
+    proposed_insured_amount: Optional[float] = None
+    proposed_annual_premium: Optional[float] = None
+    proposed_franchise: Optional[float] = None
+    selected_guarantees: Optional[List[dict]] = None
+    rejection_reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class InsuranceProposalCreate(InsuranceProposalBase):
+    pass
+
+
+class InsuranceProposalUpdate(BaseModel):
+    status: Optional[ProposalStatusEnum] = None
+    validity_date: Optional[date] = None
+    proposed_insured_amount: Optional[float] = None
+    proposed_annual_premium: Optional[float] = None
+    proposed_franchise: Optional[float] = None
+    selected_guarantees: Optional[List[dict]] = None
+    rejection_reason: Optional[str] = None
+    notes: Optional[str] = None
+    converted_contract_id: Optional[int] = None
+
+
+class InsuranceProposal(InsuranceProposalBase):
+    id: int
+    converted_contract_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

@@ -8,6 +8,9 @@ const app = {
         sites: [],
         contracts: [],
         history: [],
+        salesReps: [],
+        visits: [],
+        proposals: [],
     },
 };
 
@@ -101,6 +104,9 @@ function switchView(viewName) {
         sites: { title: 'Chantiers', subtitle: 'Gestion des chantiers de construction' },
         contracts: { title: 'Contrats', subtitle: 'Gestion des contrats d\'assurance' },
         claims: { title: 'Sinistres', subtitle: 'Gestion des sinistres construction' },
+        'sales-reps': { title: 'Commerciaux', subtitle: 'Réseau commercial terrain' },
+        visits: { title: 'Visites clients', subtitle: 'Visites commerciales et comptes rendus' },
+        proposals: { title: 'Propositions d\'assurance', subtitle: 'Propositions issues des visites et souscriptions' },
         history: { title: 'Historique', subtitle: 'Historique des modifications de contrats' },
         generate: { title: 'Génération de données', subtitle: 'Outils de génération et suppression de données' },
         referentials: { title: 'Référentiels', subtitle: 'Gestion des données de référence' },
@@ -197,6 +203,15 @@ async function loadViewData(viewName) {
         case 'claims':
             await loadClaims();
             break;
+        case 'sales-reps':
+            await loadSalesReps();
+            break;
+        case 'visits':
+            await loadVisits();
+            break;
+        case 'proposals':
+            await loadProposals();
+            break;
         case 'claim-search':
             loadClaimSearchView();
             break;
@@ -223,6 +238,8 @@ async function loadDashboard() {
         document.getElementById('stat-sites').textContent = stats.total_construction_sites || 0;
         document.getElementById('stat-contracts').textContent = stats.total_contracts || 0;
         document.getElementById('stat-claims').textContent = claimsStats.total_claims || 0;
+        document.getElementById('stat-sales-reps').textContent = stats.total_sales_reps || 0;
+        document.getElementById('stat-visits').textContent = stats.total_visits || 0;
         
         // Recent activity - simplified without loading contracts
         displayRecentActivity([]);
@@ -1867,6 +1884,430 @@ function displayHistory(history) {
     `;
     
     container.innerHTML = html;
+}
+
+// Réseau commercial - Utilitaires
+function buildLookup(list, keyFn = (item) => item.id) {
+    const map = {};
+    (list || []).forEach(item => { map[keyFn(item)] = item; });
+    return map;
+}
+
+function clientDisplayName(client) {
+    if (!client) return '-';
+    return client.company_name || `${client.first_name || ''} ${client.last_name || ''}`.trim() || '-';
+}
+
+function salesRepDisplayName(rep) {
+    if (!rep) return '-';
+    return `${rep.civility || ''} ${rep.first_name} ${rep.last_name}`.trim();
+}
+
+function getVisitStatusBadge(status) {
+    const badges = {
+        realisee: 'success',
+        planifiee: 'info',
+        annulee: 'danger',
+        reportee: 'warning',
+        absence_client: 'secondary',
+    };
+    return badges[status] || 'secondary';
+}
+
+const VISIT_TYPE_LABELS = {
+    prospection: 'Prospection',
+    decouverte_besoins: 'Découverte des besoins',
+    suivi_contrat: 'Suivi de contrat',
+    renouvellement: 'Renouvellement',
+    gestion_sinistre: 'Gestion de sinistre',
+    fidelisation: 'Fidélisation',
+    souscription: 'Souscription',
+};
+
+function getProposalStatusBadge(status) {
+    const badges = {
+        brouillon: 'secondary',
+        envoyee: 'info',
+        en_reflexion: 'warning',
+        acceptee: 'success',
+        refusee: 'danger',
+        expiree: 'secondary',
+        sans_suite: 'secondary',
+    };
+    return badges[status] || 'secondary';
+}
+
+const CONTRACT_TYPE_LABELS = {
+    DO: 'Dommage-Ouvrage',
+    RCD: 'RC Décennale',
+    TRC: 'Tous Risques Chantier',
+    CNR: 'Constructeur Non Réalisateur',
+    RCMO: "RC Maître d'Ouvrage",
+    PUC: 'Police Unique de Chantier',
+};
+
+// Commerciaux
+async function loadSalesReps() {
+    try {
+        const response = await api.getSalesReps({ limit: 300 });
+        const salesReps = response.items || response;
+        app.data.salesReps = salesReps;
+
+        const regionSelect = document.getElementById('sales-rep-region-filter');
+        if (regionSelect && regionSelect.options.length <= 1) {
+            const regions = [...new Set(salesReps.map(r => r.region).filter(Boolean))].sort();
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                regionSelect.appendChild(option);
+            });
+        }
+
+        displaySalesReps(salesReps);
+    } catch (error) {
+        console.error('Error loading sales reps:', error);
+        showToast('error', 'Erreur', 'Impossible de charger les commerciaux');
+    }
+}
+
+function displaySalesReps(salesReps) {
+    const container = document.getElementById('sales-reps-table-container');
+
+    if (!salesReps || salesReps.length === 0) {
+        container.innerHTML = '<p class="help-text">Aucun commercial trouvé</p>';
+        return;
+    }
+
+    const html = `
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Matricule</th>
+                        <th>Nom</th>
+                        <th>Région</th>
+                        <th>Agence</th>
+                        <th>Email</th>
+                        <th>Embauche</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${salesReps.map(rep => `
+                        <tr>
+                            <td><strong>${rep.employee_number}</strong></td>
+                            <td>${salesRepDisplayName(rep)}</td>
+                            <td>${rep.region || '-'}</td>
+                            <td>${rep.agency || '-'}</td>
+                            <td>${rep.email || '-'}</td>
+                            <td>${formatDate(rep.hire_date)}</td>
+                            <td><span class="badge badge-${rep.is_active ? 'success' : 'secondary'}">${rep.is_active ? 'Actif' : 'Inactif'}</span></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function filterSalesReps() {
+    const region = document.getElementById('sales-rep-region-filter').value;
+    const activeFilter = document.getElementById('sales-rep-active-filter').value;
+    const search = document.getElementById('sales-rep-search').value.trim().toLowerCase();
+
+    let filtered = app.data.salesReps || [];
+
+    if (region) filtered = filtered.filter(r => r.region === region);
+    if (activeFilter) filtered = filtered.filter(r => String(r.is_active) === activeFilter);
+    if (search) {
+        filtered = filtered.filter(r =>
+            salesRepDisplayName(r).toLowerCase().includes(search) ||
+            (r.employee_number || '').toLowerCase().includes(search)
+        );
+    }
+
+    displaySalesReps(filtered);
+}
+
+// Visites clients (avec compte rendu)
+async function loadVisits() {
+    try {
+        const [visitsResponse, salesRepsResponse, clients] = await Promise.all([
+            api.getVisits({ limit: 200 }),
+            api.getSalesReps({ limit: 300 }),
+            api.getClients({ limit: 300 }),
+        ]);
+
+        const visits = visitsResponse.items || visitsResponse;
+        app.data.visits = visits;
+        app.data.salesRepsLookup = buildLookup(salesRepsResponse.items || salesRepsResponse);
+        app.data.clientsLookup = buildLookup(clients);
+
+        displayVisits(visits);
+    } catch (error) {
+        console.error('Error loading visits:', error);
+        showToast('error', 'Erreur', 'Impossible de charger les visites');
+    }
+}
+
+function displayVisits(visits) {
+    const container = document.getElementById('visits-table-container');
+
+    if (!visits || visits.length === 0) {
+        container.innerHTML = '<p class="help-text">Aucune visite trouvée</p>';
+        return;
+    }
+
+    const html = `
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Numéro</th>
+                        <th>Date</th>
+                        <th>Commercial</th>
+                        <th>Client</th>
+                        <th>Type</th>
+                        <th>Statut</th>
+                        <th>Satisfaction</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${visits.map(visit => {
+                        const rep = app.data.salesRepsLookup ? app.data.salesRepsLookup[visit.sales_rep_id] : null;
+                        const client = app.data.clientsLookup ? app.data.clientsLookup[visit.client_id] : null;
+                        return `
+                        <tr>
+                            <td><strong>${visit.visit_number}</strong></td>
+                            <td>${formatDateTime(visit.visit_date)}</td>
+                            <td>${salesRepDisplayName(rep) || '-'}</td>
+                            <td>${clientDisplayName(client)}</td>
+                            <td><span class="badge badge-info">${VISIT_TYPE_LABELS[visit.visit_type] || visit.visit_type}</span></td>
+                            <td><span class="badge badge-${getVisitStatusBadge(visit.visit_status)}">${visit.visit_status}</span></td>
+                            <td>${visit.client_satisfaction ? '⭐'.repeat(visit.client_satisfaction) : '-'}</td>
+                            <td>
+                                <div class="table-actions">
+                                    <button class="btn-edit" onclick="viewVisitDetail(${visit.id})" title="Voir le compte rendu">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function filterVisits() {
+    const type = document.getElementById('visit-type-filter').value;
+    const status = document.getElementById('visit-status-filter').value;
+    const dateFrom = document.getElementById('visit-date-from').value;
+    const dateTo = document.getElementById('visit-date-to').value;
+    const search = document.getElementById('visit-search').value.trim().toLowerCase();
+
+    let filtered = app.data.visits || [];
+
+    if (type) filtered = filtered.filter(v => v.visit_type === type);
+    if (status) filtered = filtered.filter(v => v.visit_status === status);
+    if (dateFrom) filtered = filtered.filter(v => v.visit_date >= dateFrom);
+    if (dateTo) filtered = filtered.filter(v => v.visit_date <= dateTo + 'T23:59:59');
+    if (search) {
+        filtered = filtered.filter(v => {
+            const rep = app.data.salesRepsLookup ? app.data.salesRepsLookup[v.sales_rep_id] : null;
+            const client = app.data.clientsLookup ? app.data.clientsLookup[v.client_id] : null;
+            return salesRepDisplayName(rep).toLowerCase().includes(search) ||
+                   clientDisplayName(client).toLowerCase().includes(search);
+        });
+    }
+
+    displayVisits(filtered);
+}
+
+function clearVisitFilters() {
+    document.getElementById('visit-type-filter').value = '';
+    document.getElementById('visit-status-filter').value = '';
+    document.getElementById('visit-date-from').value = '';
+    document.getElementById('visit-date-to').value = '';
+    document.getElementById('visit-search').value = '';
+    displayVisits(app.data.visits || []);
+}
+
+async function viewVisitDetail(visitId) {
+    try {
+        const visit = await api.getVisit(visitId);
+        const rep = app.data.salesRepsLookup ? app.data.salesRepsLookup[visit.sales_rep_id] : null;
+        const client = app.data.clientsLookup ? app.data.clientsLookup[visit.client_id] : null;
+
+        document.getElementById('visits-table-container').style.display = 'none';
+        document.querySelector('#visits-view .view-toolbar').style.display = 'none';
+        document.getElementById('visit-detail').classList.add('active');
+
+        const topics = (visit.topics_discussed || []).map(t => `<span class="badge badge-info">${t}</span>`).join(' ');
+
+        document.getElementById('visit-detail-content').innerHTML = `
+            <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+                <i class="fas fa-calendar-check"></i>
+                Compte rendu de visite ${visit.visit_number}
+            </h3>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <label>Commercial</label>
+                    <span>${salesRepDisplayName(rep)} ${rep ? `(${rep.employee_number})` : ''}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Client</label>
+                    <span>${clientDisplayName(client)}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Date et heure</label>
+                    <span>${formatDateTime(visit.visit_date)}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Durée</label>
+                    <span>${visit.duration_minutes ? visit.duration_minutes + ' min' : '-'}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Type de visite</label>
+                    <span><span class="badge badge-info">${VISIT_TYPE_LABELS[visit.visit_type] || visit.visit_type}</span></span>
+                </div>
+                <div class="detail-item">
+                    <label>Statut</label>
+                    <span><span class="badge badge-${getVisitStatusBadge(visit.visit_status)}">${visit.visit_status}</span></span>
+                </div>
+                <div class="detail-item">
+                    <label>Satisfaction client</label>
+                    <span>${visit.client_satisfaction ? '⭐'.repeat(visit.client_satisfaction) + ` (${visit.client_satisfaction}/5)` : '-'}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Prochaine visite prévue</label>
+                    <span>${formatDate(visit.next_visit_date)}</span>
+                </div>
+            </div>
+            <div class="detail-item" style="margin-top: 16px;">
+                <label>Objectif</label>
+                <p>${visit.objective || '-'}</p>
+            </div>
+            <div class="detail-item" style="margin-top: 16px;">
+                <label>Compte rendu</label>
+                <p>${visit.report_summary || '-'}</p>
+            </div>
+            <div class="detail-item" style="margin-top: 16px;">
+                <label>Sujets abordés</label>
+                <p>${topics || '-'}</p>
+            </div>
+            <div class="detail-item" style="margin-top: 16px;">
+                <label>Prochaine action</label>
+                <p>${visit.next_action || '-'}</p>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading visit detail:', error);
+        showToast('error', 'Erreur', 'Impossible de charger le compte rendu de visite');
+    }
+}
+
+function backToVisitsList() {
+    document.getElementById('visits-table-container').style.display = 'block';
+    document.querySelector('#visits-view .view-toolbar').style.display = 'flex';
+    document.getElementById('visit-detail').classList.remove('active');
+}
+
+// Propositions d'assurance
+async function loadProposals() {
+    try {
+        const [proposalsResponse, salesRepsResponse, clients] = await Promise.all([
+            api.getProposals({ limit: 200 }),
+            api.getSalesReps({ limit: 300 }),
+            api.getClients({ limit: 300 }),
+        ]);
+
+        const proposals = proposalsResponse.items || proposalsResponse;
+        app.data.proposals = proposals;
+        app.data.salesRepsLookup = buildLookup(salesRepsResponse.items || salesRepsResponse);
+        app.data.clientsLookup = buildLookup(clients);
+
+        displayProposals(proposals);
+    } catch (error) {
+        console.error('Error loading proposals:', error);
+        showToast('error', 'Erreur', 'Impossible de charger les propositions');
+    }
+}
+
+function displayProposals(proposals) {
+    const container = document.getElementById('proposals-table-container');
+
+    if (!proposals || proposals.length === 0) {
+        container.innerHTML = '<p class="help-text">Aucune proposition trouvée</p>';
+        return;
+    }
+
+    const html = `
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Numéro</th>
+                        <th>Client</th>
+                        <th>Commercial</th>
+                        <th>Produit</th>
+                        <th>Date</th>
+                        <th>Statut</th>
+                        <th>Montant assuré</th>
+                        <th>Prime annuelle</th>
+                        <th>Souscription</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${proposals.map(proposal => {
+                        const rep = app.data.salesRepsLookup ? app.data.salesRepsLookup[proposal.sales_rep_id] : null;
+                        const client = app.data.clientsLookup ? app.data.clientsLookup[proposal.client_id] : null;
+                        return `
+                        <tr>
+                            <td><strong>${proposal.proposal_number}</strong></td>
+                            <td>${clientDisplayName(client)}</td>
+                            <td>${salesRepDisplayName(rep) || '-'}</td>
+                            <td><span class="badge badge-info">${CONTRACT_TYPE_LABELS[proposal.contract_type_code] || proposal.contract_type_code}</span></td>
+                            <td>${formatDate(proposal.proposal_date)}</td>
+                            <td><span class="badge badge-${getProposalStatusBadge(proposal.status)}">${proposal.status}</span></td>
+                            <td>${formatCurrency(proposal.proposed_insured_amount)}</td>
+                            <td>${formatCurrency(proposal.proposed_annual_premium)}</td>
+                            <td>${proposal.converted_contract_id ? '<span class="badge badge-success">Souscrit</span>' : '-'}</td>
+                        </tr>
+                    `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function filterProposals() {
+    const product = document.getElementById('proposal-product-filter').value;
+    const status = document.getElementById('proposal-status-filter').value;
+
+    let filtered = app.data.proposals || [];
+
+    if (product) filtered = filtered.filter(p => p.contract_type_code === product);
+    if (status) filtered = filtered.filter(p => p.status === status);
+
+    displayProposals(filtered);
+}
+
+function clearProposalFilters() {
+    document.getElementById('proposal-product-filter').value = '';
+    document.getElementById('proposal-status-filter').value = '';
+    displayProposals(app.data.proposals || []);
 }
 
 // Referentials

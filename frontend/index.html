@@ -11,7 +11,7 @@
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#2563eb">
     <meta name="description" content="Application de gestion des sinistres construction - Mode hors ligne disponible">
-    <link rel="stylesheet" href="/static/styles.css?v=3">
+    <link rel="stylesheet" href="/static/styles.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -126,6 +126,27 @@
                         <a href="#" class="nav-item nav-sub-item" data-view="history">
                             <i class="fas fa-history"></i>
                             <span>Historique</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <a href="#" class="nav-item nav-group-toggle">
+                        <i class="fas fa-route"></i>
+                        <span>Réseau commercial</span>
+                        <i class="fas fa-chevron-down nav-group-arrow"></i>
+                    </a>
+                    <div class="nav-group-items">
+                        <a href="#" class="nav-item nav-sub-item" data-view="sales-reps">
+                            <i class="fas fa-id-badge"></i>
+                            <span>Commerciaux</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="visits">
+                            <i class="fas fa-calendar-check"></i>
+                            <span>Visites clients</span>
+                        </a>
+                        <a href="#" class="nav-item nav-sub-item" data-view="proposals">
+                            <i class="fas fa-file-signature"></i>
+                            <span>Propositions</span>
                         </a>
                     </div>
                 </div>
@@ -245,6 +266,24 @@
                             <div class="stat-content">
                                 <h3 id="stat-claims">0</h3>
                                 <p>Sinistres</p>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-view="sales-reps">
+                            <div class="stat-icon bg-indigo">
+                                <i class="fas fa-id-badge"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="stat-sales-reps">0</h3>
+                                <p>Commerciaux</p>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-view="visits">
+                            <div class="stat-icon bg-teal">
+                                <i class="fas fa-calendar-check"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="stat-visits">0</h3>
+                                <p>Visites clients</p>
                             </div>
                         </div>
                     </div>
@@ -471,6 +510,99 @@
                         <div id="claim-detail-content"></div>
                     </div>
                 </div>
+
+                <!-- Sales Reps View -->
+                <div id="sales-reps-view" class="view">
+                    <div class="view-toolbar">
+                        <div class="toolbar-filters">
+                            <select id="sales-rep-region-filter" onchange="filterSalesReps()" aria-label="Filtrer par région">
+                                <option value="">Toutes les régions</option>
+                            </select>
+                            <select id="sales-rep-active-filter" onchange="filterSalesReps()" aria-label="Filtrer par statut">
+                                <option value="">Tous les statuts</option>
+                                <option value="true">Actif</option>
+                                <option value="false">Inactif</option>
+                            </select>
+                            <input type="text" id="sales-rep-search" placeholder="Rechercher un commercial..." oninput="filterSalesReps()">
+                        </div>
+                    </div>
+                    <div id="sales-reps-table-container"></div>
+                </div>
+
+                <!-- Visits View -->
+                <div id="visits-view" class="view">
+                    <div class="view-toolbar">
+                        <div class="toolbar-filters">
+                            <select id="visit-type-filter" onchange="filterVisits()" aria-label="Filtrer par type de visite">
+                                <option value="">Tous les types</option>
+                                <option value="prospection">Prospection</option>
+                                <option value="decouverte_besoins">Découverte des besoins</option>
+                                <option value="suivi_contrat">Suivi de contrat</option>
+                                <option value="renouvellement">Renouvellement</option>
+                                <option value="gestion_sinistre">Gestion de sinistre</option>
+                                <option value="fidelisation">Fidélisation</option>
+                                <option value="souscription">Souscription</option>
+                            </select>
+                            <select id="visit-status-filter" onchange="filterVisits()" aria-label="Filtrer par statut de visite">
+                                <option value="">Tous les statuts</option>
+                                <option value="realisee">Réalisée</option>
+                                <option value="planifiee">Planifiée</option>
+                                <option value="annulee">Annulée</option>
+                                <option value="reportee">Reportée</option>
+                                <option value="absence_client">Absence client</option>
+                            </select>
+                            <input type="date" id="visit-date-from" placeholder="Date début" onchange="filterVisits()">
+                            <input type="date" id="visit-date-to" placeholder="Date fin" onchange="filterVisits()">
+                            <input type="text" id="visit-search" placeholder="Client, commercial..." oninput="filterVisits()">
+                            <button class="btn btn-secondary btn-sm" onclick="clearVisitFilters()" title="Réinitialiser les filtres">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="visits-table-container"></div>
+
+                    <!-- Visit Detail View (compte rendu) -->
+                    <div id="visit-detail" class="detail-view">
+                        <div class="view-toolbar">
+                            <button class="btn btn-secondary" onclick="backToVisitsList()">
+                                <i class="fas fa-arrow-left"></i> Retour à la liste
+                            </button>
+                        </div>
+                        <div id="visit-detail-content"></div>
+                    </div>
+                </div>
+
+                <!-- Proposals View -->
+                <div id="proposals-view" class="view">
+                    <div class="view-toolbar">
+                        <div class="toolbar-filters">
+                            <select id="proposal-product-filter" onchange="filterProposals()" aria-label="Filtrer par produit">
+                                <option value="">Tous les produits</option>
+                                <option value="DO">Dommage-Ouvrage</option>
+                                <option value="RCD">RC Décennale</option>
+                                <option value="TRC">Tous Risques Chantier</option>
+                                <option value="CNR">Constructeur Non Réalisateur</option>
+                                <option value="RCMO">RC Maître d'Ouvrage</option>
+                                <option value="PUC">Police Unique de Chantier</option>
+                            </select>
+                            <select id="proposal-status-filter" onchange="filterProposals()" aria-label="Filtrer par statut de proposition">
+                                <option value="">Tous les statuts</option>
+                                <option value="brouillon">Brouillon</option>
+                                <option value="envoyee">Envoyée</option>
+                                <option value="en_reflexion">En réflexion</option>
+                                <option value="acceptee">Acceptée</option>
+                                <option value="refusee">Refusée</option>
+                                <option value="expiree">Expirée</option>
+                                <option value="sans_suite">Sans suite</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="clearProposalFilters()" title="Réinitialiser les filtres">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="proposals-table-container"></div>
+                </div>
+
                 <!-- Claim Search View -->
                 <div id="claim-search-view" class="view">
                     <div class="view-toolbar">
@@ -899,10 +1031,10 @@
         </div>
     </div>
 
-    <script src="/static/api.js?v=5"></script>
+    <script src="/static/api.js?v=6"></script>
     <script src="/static/phonetic.js?v=5"></script>
     <script src="/static/sync-manager.js"></script>
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/app.js?v=6"></script>
     
     <!-- Service Worker Registration -->
     <script>

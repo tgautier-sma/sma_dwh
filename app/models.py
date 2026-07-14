@@ -325,7 +325,14 @@ class ClientContractModel(Base):
     
     construction_site_id = Column(Integer, ForeignKey("fake_construction_sites.id"), nullable=True)
     construction_site = relationship("ConstructionSiteModel", back_populates="contracts")
-    
+
+    # Origine commerciale de la souscription (visite terrain à l'origine du contrat)
+    sales_rep_id = Column(Integer, ForeignKey("fake_sales_reps.id"), nullable=True)
+    sales_rep = relationship("SalesRepModel", back_populates="contracts")
+
+    originating_visit_id = Column(Integer, ForeignKey("fake_client_visits.id"), nullable=True)
+    originating_visit = relationship("ClientVisitModel", backref="resulting_contracts")
+
     # Relation historique
     history = relationship("ContractHistoryModel", back_populates="contract", cascade="all, delete-orphan")
     
@@ -1527,6 +1534,189 @@ class ClaimModel(Base):
     def is_open(self):
         """Vérifie si le sinistre est toujours ouvert"""
         return self.status not in [ClaimStatusEnum.SETTLED.value, ClaimStatusEnum.CLOSED.value, ClaimStatusEnum.REJECTED.value]
+
+
+# =============================================================================
+# RÉSEAU COMMERCIAL - VISITES CLIENTS - PROPOSITIONS D'ASSURANCE
+# =============================================================================
+
+class VisitTypeEnum(str, enum.Enum):
+    """Types de visite commerciale"""
+    PROSPECTION = "prospection"
+    DECOUVERTE_BESOINS = "decouverte_besoins"
+    SUIVI_CONTRAT = "suivi_contrat"
+    RENOUVELLEMENT = "renouvellement"
+    GESTION_SINISTRE = "gestion_sinistre"
+    FIDELISATION = "fidelisation"
+    SOUSCRIPTION = "souscription"
+
+
+class VisitStatusEnum(str, enum.Enum):
+    """Statuts d'une visite commerciale"""
+    PLANIFIEE = "planifiee"
+    REALISEE = "realisee"
+    ANNULEE = "annulee"
+    REPORTEE = "reportee"
+    ABSENCE_CLIENT = "absence_client"
+
+
+class ProposalStatusEnum(str, enum.Enum):
+    """Statuts d'une proposition d'assurance"""
+    BROUILLON = "brouillon"
+    ENVOYEE = "envoyee"
+    EN_REFLEXION = "en_reflexion"
+    ACCEPTEE = "acceptee"
+    REFUSEE = "refusee"
+    EXPIREE = "expiree"
+    SANS_SUITE = "sans_suite"
+
+
+class SalesRepModel(Base):
+    """Commercial terrain assurant les visites clients"""
+    __tablename__ = "fake_sales_reps"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Identification
+    employee_number = Column(String(20), unique=True, nullable=False, index=True)  # Ex: COM-0001
+    civility = Column(String(10), nullable=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+
+    # Contact
+    email = Column(String(255), nullable=True)
+    phone = Column(String(20), nullable=True)
+    mobile = Column(String(20), nullable=True)
+
+    # Rattachement
+    region = Column(String(100), nullable=True)  # Région commerciale
+    agency = Column(String(150), nullable=True)  # Agence de rattachement
+    manager_name = Column(String(200), nullable=True)
+
+    # Carrière
+    hire_date = Column(Date, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relations
+    visits = relationship("ClientVisitModel", back_populates="sales_rep")
+    proposals = relationship("InsuranceProposalModel", back_populates="sales_rep")
+    contracts = relationship("ClientContractModel", back_populates="sales_rep")
+
+    @property
+    def full_name(self):
+        return f"{self.civility or ''} {self.first_name} {self.last_name}".strip()
+
+    def __repr__(self):
+        return f"<SalesRep(number={self.employee_number}, name={self.first_name} {self.last_name})>"
+
+
+class ClientVisitModel(Base):
+    """Visite terrain d'un commercial chez un client, avec compte rendu"""
+    __tablename__ = "fake_client_visits"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Identification
+    visit_number = Column(String(30), unique=True, nullable=False, index=True)  # Ex: VIS-2025-000001
+
+    # Relations
+    sales_rep_id = Column(Integer, ForeignKey("fake_sales_reps.id"), nullable=False)
+    sales_rep = relationship("SalesRepModel", back_populates="visits")
+
+    client_id = Column(Integer, ForeignKey("fake_clients.id"), nullable=False)
+    client = relationship("ClientModel", backref="visits")
+
+    address_id = Column(Integer, ForeignKey("fake_client_addresses.id"), nullable=True)  # Adresse/site visité
+    address = relationship("ClientAddressModel", backref="visits")
+
+    # Planification
+    visit_date = Column(DateTime, nullable=False, index=True)
+    duration_minutes = Column(Integer, nullable=True)
+    visit_type = Column(String(30), nullable=False)  # VisitTypeEnum
+    visit_status = Column(String(30), default="realisee")  # VisitStatusEnum
+
+    # Compte rendu de visite
+    objective = Column(Text, nullable=True)  # Objectif de la visite
+    report_summary = Column(Text, nullable=True)  # Compte rendu détaillé
+    topics_discussed = Column(JSON, nullable=True)  # Liste de sujets abordés
+    client_satisfaction = Column(Integer, nullable=True)  # Note de 1 à 5
+    next_action = Column(Text, nullable=True)  # Prochaine action à mener
+    next_visit_date = Column(Date, nullable=True)  # Date de la prochaine visite prévue
+
+    # Localisation de la visite
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relations
+    proposals = relationship("InsuranceProposalModel", back_populates="visit")
+
+    def __repr__(self):
+        return f"<ClientVisit(number={self.visit_number}, date={self.visit_date}, type={self.visit_type})>"
+
+
+class InsuranceProposalModel(Base):
+    """Proposition d'assurance faite lors d'une visite, sur un produit du référentiel (DO, RCD, TRC, CNR, RCMO, PUC)"""
+    __tablename__ = "fake_insurance_proposals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Identification
+    proposal_number = Column(String(30), unique=True, nullable=False, index=True)  # Ex: PROP-2025-000001
+
+    # Relations
+    visit_id = Column(Integer, ForeignKey("fake_client_visits.id"), nullable=True)
+    visit = relationship("ClientVisitModel", back_populates="proposals")
+
+    client_id = Column(Integer, ForeignKey("fake_clients.id"), nullable=False)
+    client = relationship("ClientModel", backref="proposals")
+
+    sales_rep_id = Column(Integer, ForeignKey("fake_sales_reps.id"), nullable=False)
+    sales_rep = relationship("SalesRepModel", back_populates="proposals")
+
+    construction_site_id = Column(Integer, ForeignKey("fake_construction_sites.id"), nullable=True)
+    construction_site = relationship("ConstructionSiteModel", backref="proposals")
+
+    # Produit proposé (référentiel ref_insurance_contract_types : DO, RCD, TRC, CNR, RCMO, PUC)
+    contract_type_code = Column(String(20), nullable=False)
+
+    # Dates
+    proposal_date = Column(Date, nullable=False)
+    validity_date = Column(Date, nullable=True)  # Date limite de validité de l'offre
+
+    # Statut
+    status = Column(String(30), default="envoyee")  # ProposalStatusEnum
+
+    # Montants proposés
+    proposed_insured_amount = Column(Float, nullable=True)
+    proposed_annual_premium = Column(Float, nullable=True)
+    proposed_franchise = Column(Float, nullable=True)
+
+    # Garanties proposées (même format que selected_guarantees des contrats)
+    selected_guarantees = Column(JSON, nullable=True)
+
+    rejection_reason = Column(Text, nullable=True)  # Si refusée / sans suite
+    notes = Column(Text, nullable=True)
+
+    # Souscription : contrat effectivement créé si la proposition est acceptée
+    converted_contract_id = Column(Integer, ForeignKey("fake_client_contracts.id"), nullable=True)
+    converted_contract = relationship("ClientContractModel", foreign_keys=[converted_contract_id], backref="source_proposal")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<InsuranceProposal(number={self.proposal_number}, product={self.contract_type_code}, status={self.status})>"
+
+    @property
+    def is_converted(self):
+        return self.converted_contract_id is not None
 
 
 # =============================================================================

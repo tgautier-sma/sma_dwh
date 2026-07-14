@@ -2,10 +2,11 @@
 
 ## Vue d'ensemble
 
-Le système gère 3 domaines principaux :
+Le système gère 4 domaines principaux :
 1. **Clients et leurs adresses**
 2. **Contrats d'assurance et chantiers**
 3. **Référentiels** (types, garanties, clauses, etc.)
+4. **Réseau commercial** (commerciaux, visites clients, propositions d'assurance)
 
 ---
 
@@ -392,6 +393,79 @@ Exclusions types pour les contrats.
 
 ---
 
+## 4️⃣ RÉSEAU COMMERCIAL
+
+### Table : `sales_reps`
+Commerciaux terrain assurant les visites clients.
+
+**Champs principaux :**
+- `id`, `employee_number` (unique) - Matricule (ex: COM-0001)
+- `civility`, `first_name`, `last_name`
+- `email`, `phone`, `mobile`
+- `region` - Région commerciale de rattachement
+- `agency` - Agence de rattachement
+- `manager_name` - Manager
+- `hire_date` - Date d'embauche
+- `is_active`
+
+---
+
+### Table : `client_visits`
+Visites terrain d'un commercial chez un client, avec compte rendu.
+
+**Identification et relations :**
+- `visit_number` (unique) - Ex: VIS-2025-000001
+- `sales_rep_id` → sales_reps
+- `client_id` → clients
+- `address_id` → client_addresses (site visité, optionnel)
+
+**Planification :**
+- `visit_date`, `duration_minutes`
+- `visit_type` (enum) - prospection, decouverte_besoins, suivi_contrat, renouvellement, gestion_sinistre, fidelisation, souscription
+- `visit_status` (enum) - planifiee, realisee, annulee, reportee, absence_client
+
+**Compte rendu de visite :**
+- `objective` - Objectif de la visite
+- `report_summary` - Compte rendu détaillé
+- `topics_discussed` (JSON) - Sujets abordés
+- `client_satisfaction` (1 à 5)
+- `next_action`, `next_visit_date`
+
+**Localisation :**
+- `latitude`, `longitude`
+
+---
+
+### Table : `insurance_proposals`
+Proposition d'assurance faite lors d'une visite, sur un produit du référentiel existant (DO, RCD, TRC, CNR, RCMO, PUC).
+
+**Identification et relations :**
+- `proposal_number` (unique) - Ex: PROP-2025-000001
+- `visit_id` → client_visits (visite à l'origine de la proposition)
+- `client_id` → clients
+- `sales_rep_id` → sales_reps
+- `construction_site_id` → construction_sites (optionnel)
+- `contract_type_code` - Code produit du référentiel `ref_insurance_contract_types`
+
+**Suivi commercial :**
+- `proposal_date`, `validity_date`
+- `status` (enum) - brouillon, envoyee, en_reflexion, acceptee, refusee, expiree, sans_suite
+- `proposed_insured_amount`, `proposed_annual_premium`, `proposed_franchise`
+- `selected_guarantees` (JSON)
+- `rejection_reason`, `notes`
+
+**Souscription :**
+- `converted_contract_id` → client_contracts. Renseigné quand la proposition acceptée aboutit à la création effective d'un contrat.
+
+---
+
+### Liens de traçabilité sur `client_contracts`
+Pour tracer l'origine commerciale d'une souscription, `client_contracts` porte désormais :
+- `sales_rep_id` → sales_reps (commercial à l'origine de la souscription)
+- `originating_visit_id` → client_visits (visite ayant conduit à la souscription)
+
+---
+
 ## 🔗 Relations entre les tables
 
 ```
@@ -406,6 +480,15 @@ ref_insurance_contract_types (1) -----> (*) client_contracts
 ref_building_categories (1) -----> (*) construction_sites
 ref_work_categories (1) -----> (*) construction_sites
 ref_professions (1) -----> (*) clients (via profession_code)
+
+sales_reps (1) -----> (*) client_visits
+sales_reps (1) -----> (*) insurance_proposals
+sales_reps (1) -----> (*) client_contracts (via sales_rep_id)
+clients (1) -----> (*) client_visits
+clients (1) -----> (*) insurance_proposals
+client_visits (1) -----> (*) insurance_proposals
+client_visits (1) -----> (*) client_contracts (via originating_visit_id)
+insurance_proposals (1) -----> (0..1) client_contracts (via converted_contract_id)
 ```
 
 ---

@@ -657,6 +657,40 @@ class API {
         });
     }
 
+    // Réseau commercial - Commerciaux
+    async getSalesReps(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/sales-reps/?${queryString}`);
+    }
+
+    async getSalesRep(salesRepId) {
+        return this.request(`/sales-reps/${salesRepId}`);
+    }
+
+    async getSalesRepsStats() {
+        return this.request('/sales-reps/statistics/summary');
+    }
+
+    // Réseau commercial - Visites clients
+    async getVisits(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/visits/?${queryString}`);
+    }
+
+    async getVisit(visitId) {
+        return this.request(`/visits/${visitId}`);
+    }
+
+    // Réseau commercial - Propositions d'assurance
+    async getProposals(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/proposals/?${queryString}`);
+    }
+
+    async getProposal(proposalId) {
+        return this.request(`/proposals/${proposalId}`);
+    }
+
     // Data Generation (via Python script - simulate with API calls)
     async generateData(count, type, clean) {
         return this.request('/generate-data', {

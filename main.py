@@ -13,7 +13,7 @@ import os
 
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import clients, contracts, sites, referentials, addresses, history, claims, diagrams
+from app.routers import clients, contracts, sites, referentials, addresses, history, claims, diagrams, sales_reps, visits, proposals
 
 
 @asynccontextmanager
@@ -72,6 +72,9 @@ app.include_router(referentials.router)
 app.include_router(history.router)
 app.include_router(claims.router)
 app.include_router(diagrams.router)
+app.include_router(sales_reps.router)
+app.include_router(visits.router)
+app.include_router(proposals.router)
 
 # Montage des fichiers statiques pour le front-end
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
@@ -117,12 +120,18 @@ def health_check():
 @app.get("/stats", tags=["Statistics"])
 def get_statistics(db: Session = Depends(get_db)):
     """Obtenir les statistiques globales de la base de données"""
-    from app.models import ClientModel, ClientAddressModel, ConstructionSiteModel, ClientContractModel
-    
+    from app.models import (
+        ClientModel, ClientAddressModel, ConstructionSiteModel, ClientContractModel,
+        SalesRepModel, ClientVisitModel, InsuranceProposalModel
+    )
+
     total_clients = db.query(ClientModel).count()
     total_addresses = db.query(ClientAddressModel).count()
     total_construction_sites = db.query(ConstructionSiteModel).count()
     total_contracts = db.query(ClientContractModel).count()
+    total_sales_reps = db.query(SalesRepModel).count()
+    total_visits = db.query(ClientVisitModel).count()
+    total_proposals = db.query(InsuranceProposalModel).count()
     
     # Statistiques par type de client
     clients_particulier = db.query(ClientModel).filter(ClientModel.client_type == 'particulier').count()
@@ -140,6 +149,9 @@ def get_statistics(db: Session = Depends(get_db)):
         "total_addresses": total_addresses,
         "total_construction_sites": total_construction_sites,
         "total_contracts": total_contracts,
+        "total_sales_reps": total_sales_reps,
+        "total_visits": total_visits,
+        "total_proposals": total_proposals,
         "clients_by_type": {
             "particulier": clients_particulier,
             "professionnel": clients_professionnel
