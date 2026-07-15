@@ -20,15 +20,22 @@ Usage:
 """
 import argparse
 import random
+import types
 from datetime import datetime, date, timedelta
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.exc import OperationalError, DBAPIError
 from faker import Faker
 
-from app.database import SessionLocal, engine
+from app.database import engine
 
 # Le moteur applicatif logue chaque requête SQL (utile pour l'API, inutile et très
 # coûteux ici vu le volume de requêtes générées par ce script en masse).
 engine.echo = False
+
+# expire_on_commit=False : les objets chargés (commerciaux, clients) doivent rester
+# utilisables en mémoire après un commit ou une reconnexion, sans requête de rafraîchissement
+# (indispensable pour survivre à une coupure de connexion en cours de génération).
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, expire_on_commit=False)
 from app.models import (
     SalesRepModel, ClientVisitModel, InsuranceProposalModel,
     ClientModel, ConstructionSiteModel,
@@ -220,16 +227,41 @@ def create_sales_reps(db: Session, count: int, start_date: date) -> list:
 # PORTEFEUILLE CLIENTS / OUTILS
 # =============================================================================
 
+def to_plain_rep(rep: SalesRepModel):
+    """Copie les seuls attributs utilisés dans une structure indépendante de toute Session,
+    pour survivre à une reconnexion en cours de génération (cf. reconnect())."""
+    return types.SimpleNamespace(id=rep.id, hire_date=rep.hire_date, full_name=rep.full_name)
+
+
+def to_plain_client(client: ClientModel):
+    """Idem pour les clients (avec leurs adresses), utilisés massivement dans la boucle principale."""
+    return types.SimpleNamespace(
+        id=client.id,
+        company_name=client.company_name,
+        first_name=client.first_name,
+        last_name=client.last_name,
+        addresses=[
+            types.SimpleNamespace(id=a.id, latitude=a.latitude, longitude=a.longitude)
+            for a in client.addresses
+        ],
+    )
+
+
 def build_rep_portfolios(db: Session, sales_reps: list) -> dict:
     """Attribue à chaque commercial un portefeuille de quelques clients existants"""
-    all_clients = db.query(ClientModel).filter(ClientModel.is_active == True).all()  # noqa: E712
+    from sqlalchemy.orm import selectinload
+    all_clients = db.query(ClientModel).options(selectinload(ClientModel.addresses)).filter(
+        ClientModel.is_active == True  # noqa: E712
+    ).all()
     if not all_clients:
         raise Exception("Aucun client actif trouvé. Générez d'abord des clients (generate_client_data.py).")
 
+    plain_clients = [to_plain_client(c) for c in all_clients]
+
     portfolios = {}
     for rep in sales_reps:
-        size = min(len(all_clients), random.randint(3, 8))
-        portfolios[rep.id] = random.sample(all_clients, size)
+        size = min(len(plain_clients), random.randint(3, 8))
+        portfolios[rep.id] = random.sample(plain_clients, size)
     return portfolios
 
 
@@ -455,6 +487,20 @@ def create_visit(db: Session, sales_rep: SalesRepModel, client: ClientModel,
 # ORCHESTRATION
 # =============================================================================
 
+def reconnect(db: Session) -> Session:
+    """Abandonne la session courante (potentiellement morte) et en ouvre une nouvelle.
+    Le pool_pre_ping du moteur revalide la nouvelle connexion à la première requête."""
+    try:
+        db.rollback()
+    except Exception:
+        pass
+    try:
+        db.close()
+    except Exception:
+        pass
+    return SessionLocal()
+
+
 def generate_visits_campaign(db: Session, start_date: date, end_date: date,
                               max_reps: int, max_days: int, proposal_rate: float,
                               conversion_rate: float, commit_every: int = 200):
@@ -465,6 +511,7 @@ def generate_visits_campaign(db: Session, start_date: date, end_date: date,
     if max_reps:
         all_reps = random.sample(all_reps, min(max_reps, len(all_reps)))
 
+    all_reps = [to_plain_rep(r) for r in all_reps]
     portfolios = build_rep_portfolios(db, all_reps)
     contract_type_ids = get_contract_type_id_map(db)
 
@@ -493,30 +540,42 @@ def generate_visits_campaign(db: Session, start_date: date, end_date: date,
             if not rep_clients or num_visits == 0:
                 continue
 
-            for _ in range(num_visits):
-                client = random.choice(rep_clients)
-                visit_time = datetime.combine(day, datetime.min.time()) + timedelta(
-                    hours=random.randint(8, 17), minutes=random.choice([0, 15, 30, 45])
-                )
-                visit = create_visit(db, rep, client, visit_time, visit_seq)
-                total_visits += 1
+            try:
+                for _ in range(num_visits):
+                    client = random.choice(rep_clients)
+                    visit_time = datetime.combine(day, datetime.min.time()) + timedelta(
+                        hours=random.randint(8, 17), minutes=random.choice([0, 15, 30, 45])
+                    )
+                    visit = create_visit(db, rep, client, visit_time, visit_seq)
+                    total_visits += 1
 
-                if (visit.visit_status == "realisee"
-                        and visit.visit_type in ("prospection", "decouverte_besoins", "renouvellement", "souscription")
-                        and random.random() < proposal_rate):
-                    proposal = create_proposal(db, visit, client, rep, proposal_seq, contract_seq, conversion_rate, contract_type_ids)
-                    total_proposals += 1
-                    if proposal.converted_contract_id:
-                        total_contracts += 1
+                    if (visit.visit_status == "realisee"
+                            and visit.visit_type in ("prospection", "decouverte_besoins", "renouvellement", "souscription")
+                            and random.random() < proposal_rate):
+                        proposal = create_proposal(db, visit, client, rep, proposal_seq, contract_seq, conversion_rate, contract_type_ids)
+                        total_proposals += 1
+                        if proposal.converted_contract_id:
+                            total_contracts += 1
 
-            if total_visits % commit_every == 0:
-                db.commit()
+                if total_visits % commit_every == 0:
+                    db.commit()
+            except (OperationalError, DBAPIError) as e:
+                print(f"  ⚠️  Connexion perdue ({e.__class__.__name__}), reconnexion et poursuite...")
+                db = reconnect(db)
+                continue
 
         if day_index % 20 == 0 or day_index == len(days):
+            try:
+                db.commit()
+            except (OperationalError, DBAPIError):
+                db = reconnect(db)
             print(f"  ... {day_index}/{len(days)} jours traités "
                   f"({total_visits} visites, {total_proposals} propositions, {total_contracts} souscriptions)")
 
-    db.commit()
+    try:
+        db.commit()
+    except (OperationalError, DBAPIError):
+        db = reconnect(db)
     return total_visits, total_proposals, total_contracts
 
 
