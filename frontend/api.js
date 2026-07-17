@@ -176,8 +176,12 @@ class API {
             });
 
             if (!response.ok) {
-                const error = await response.json();
+                const error = await response.json().catch(() => ({}));
                 throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+            }
+
+            if (response.status === 204) {
+                return null;
             }
 
             const data = await response.json();
@@ -526,6 +530,39 @@ class API {
         return this.request('/stats');
     }
 
+    async getStorageStats() {
+        return this.request('/stats/storage');
+    }
+
+    // Analytics (tableau de bord statistiques personnalisé)
+    async getAnalyticsDatasets() {
+        return this.request('/analytics/datasets');
+    }
+
+    async queryAnalytics(config) {
+        return this.request('/analytics/query', {
+            method: 'POST',
+            body: JSON.stringify(config),
+        });
+    }
+
+    async getDashboardWidgets() {
+        return this.request('/analytics/widgets');
+    }
+
+    async createDashboardWidget(widget) {
+        return this.request('/analytics/widgets', {
+            method: 'POST',
+            body: JSON.stringify(widget),
+        });
+    }
+
+    async deleteDashboardWidget(widgetId) {
+        return this.request(`/analytics/widgets/${widgetId}`, {
+            method: 'DELETE',
+        });
+    }
+
     // Referentials
     async getContractTypes() {
         return this.request('/referentials/contract-types');
@@ -716,6 +753,19 @@ class API {
     async deleteAllData() {
         return this.request('/clean-data', {
             method: 'POST'
+        });
+    }
+
+    async initReferentialData() {
+        return this.request('/init-referential-data', {
+            method: 'POST'
+        });
+    }
+
+    async generateVisitsNetwork(config) {
+        return this.request('/generate-visits', {
+            method: 'POST',
+            body: JSON.stringify(config)
         });
     }
 }

@@ -49,6 +49,9 @@ logs/
 *.sqlite
 *.sqlite3
 
+# Exports de base de données
+*.dump
+
 # Alembic
 alembic/versions/*.pyc
 

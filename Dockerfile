@@ -11,8 +11,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies
+# Le client PostgreSQL est installé depuis le dépôt officiel PGDG pour rester
+# compatible avec la version du serveur PostgreSQL 18 (le paquet Debian
+# "postgresql-client" livre une version 17 qui refuse de dumper un serveur 18).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql-client \
+    curl ca-certificates gnupg lsb-release \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client-18 \
+    && apt-get purge -y --auto-remove curl gnupg lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
 # Stage 2: Dependencies

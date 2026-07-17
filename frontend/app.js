@@ -14,6 +14,11 @@ const app = {
     },
 };
 
+// Statistiques - Tableau de bord personnalisé
+let analyticsDatasets = null;
+const statsChartInstances = {};
+const statsWidgetData = {};
+
 // Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
     // Simuler un temps de chargement minimum pour afficher le disclaimer
@@ -110,6 +115,7 @@ function switchView(viewName) {
         history: { title: 'Historique', subtitle: 'Historique des modifications de contrats' },
         generate: { title: 'Génération de données', subtitle: 'Outils de génération et suppression de données' },
         referentials: { title: 'Référentiels', subtitle: 'Gestion des données de référence' },
+        stats: { title: 'Statistiques', subtitle: 'Construisez votre tableau de bord en choisissant vos données et graphiques' },
         about: { title: 'À propos', subtitle: 'Informations sur l\'application et les technologies utilisées' },
     };
     
@@ -221,6 +227,9 @@ async function loadViewData(viewName) {
         case 'referentials':
             await loadReferentials();
             break;
+        case 'stats':
+            await loadStatsPage();
+            break;
         case 'about':
             // Page statique, pas de données à charger
             break;
@@ -232,7 +241,7 @@ async function loadDashboard() {
     try {
         const stats = await api.getStats();
         const claimsStats = await api.getClaimsStats();
-        
+
         document.getElementById('stat-clients').textContent = stats.total_clients || 0;
         document.getElementById('stat-addresses').textContent = stats.total_addresses || 0;
         document.getElementById('stat-sites').textContent = stats.total_construction_sites || 0;
@@ -240,15 +249,60 @@ async function loadDashboard() {
         document.getElementById('stat-claims').textContent = claimsStats.total_claims || 0;
         document.getElementById('stat-sales-reps').textContent = stats.total_sales_reps || 0;
         document.getElementById('stat-visits').textContent = stats.total_visits || 0;
-        
+
         // Recent activity - simplified without loading contracts
         displayRecentActivity([]);
-        
+
         // Alerts - simplified
         displayAlerts([]);
+
+        // Espace disque utilisé par entité
+        await loadStorageStats();
     } catch (error) {
         console.error('Error loading dashboard:', error);
         showToast('error', 'Erreur', 'Impossible de charger le tableau de bord');
+    }
+}
+
+async function loadStorageStats() {
+    const container = document.getElementById('storage-usage-list');
+    try {
+        const storage = await api.getStorageStats();
+        const maxBytes = Math.max(...storage.entities.map(e => e.size_bytes), 1);
+
+        container.innerHTML = storage.entities.map(entity => `
+            <div class="storage-usage-row">
+                <div class="storage-usage-label">
+                    <span>${entity.label}</span>
+                    <span class="storage-usage-size">${entity.size_pretty}</span>
+                </div>
+                <div class="storage-usage-bar">
+                    <div class="storage-usage-bar-fill" style="width: ${(entity.size_bytes / maxBytes * 100).toFixed(1)}%"></div>
+                </div>
+            </div>
+        `).join('') + `
+            <div class="storage-usage-total">Total : ${storage.total_pretty}</div>
+        `;
+    } catch (error) {
+        console.error('Error loading storage stats:', error);
+        container.innerHTML = '<p class="help-text">Espace disque indisponible</p>';
+    }
+}
+
+async function refreshDashboardStats(btn) {
+    const icon = btn.querySelector('i');
+    btn.disabled = true;
+    icon.classList.add('fa-spin');
+
+    try {
+        await loadDashboard();
+        showToast('success', 'Statistiques actualisées', 'Le tableau de bord a été mis à jour.');
+    } catch (error) {
+        console.error('Error refreshing dashboard:', error);
+        showToast('error', 'Erreur', 'Impossible d\'actualiser les statistiques');
+    } finally {
+        btn.disabled = false;
+        icon.classList.remove('fa-spin');
     }
 }
 
@@ -2191,6 +2245,13 @@ async function viewVisitDetail(visitId) {
                     <label>Prochaine visite prévue</label>
                     <span>${formatDate(visit.next_visit_date)}</span>
                 </div>
+                ${visit.latitude && visit.longitude ? `
+                <div class="detail-item" style="grid-column: 1 / -1;">
+                    <button class="btn btn-secondary" onclick="showSiteMap(${visit.latitude}, ${visit.longitude}, '${visit.visit_number.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-map"></i> Voir sur la carte
+                    </button>
+                </div>
+                ` : ''}
             </div>
             <div class="detail-item" style="margin-top: 16px;">
                 <label>Objectif</label>
@@ -2459,6 +2520,90 @@ async function generateClaims() {
     }
 }
 
+async function initReferentialData() {
+    showToast('info', 'Initialisation en cours', 'Initialisation des données de référence...');
+
+    try {
+        const result = await api.initReferentialData();
+        showToast('success', 'Succès', result.message);
+
+        showModal(
+            'Initialisation terminée',
+            `<div style="color: var(--success-color); font-weight: 600; margin-bottom: 16px;">
+                ✅ ${result.message}
+            </div>
+            <details>
+                <summary style="cursor: pointer; font-weight: 500; margin-bottom: 8px;">Voir les logs</summary>
+                <pre style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; overflow-x: auto; margin-top: 8px; font-size: 12px; max-height: 400px; overflow-y: auto;">
+${result.output || 'Aucun log disponible'}
+                </pre>
+            </details>`,
+            null
+        );
+    } catch (error) {
+        console.error('Erreur initialisation référentiels:', error);
+        showToast('error', 'Erreur', error.message || 'Impossible d\'initialiser les données de référence');
+    }
+}
+
+async function generateVisitsNetwork() {
+    const createReps = document.getElementById('gen-visits-create-reps').checked;
+    const repsCount = parseInt(document.getElementById('gen-visits-reps-count').value);
+    const createVisits = document.getElementById('gen-visits-create-visits').checked;
+    const maxDaysValue = document.getElementById('gen-visits-max-days').value;
+    const maxDays = maxDaysValue ? parseInt(maxDaysValue) : null;
+    const clean = document.getElementById('gen-visits-clean').checked;
+
+    if (!createReps && !createVisits && !clean) {
+        showToast('warning', 'Aucune action', 'Sélectionnez au moins une action à effectuer');
+        return;
+    }
+
+    const actions = [];
+    if (clean) actions.push('nettoyer le réseau commercial existant');
+    if (createReps) actions.push(`créer ${repsCount} commerciaux`);
+    if (createVisits) actions.push('générer les visites/propositions/souscriptions');
+
+    if (!confirm(`Confirmer : ${actions.join(', ')} ?\n\nCette opération peut prendre plusieurs minutes.`)) return;
+
+    showToast('info', 'Génération en cours', 'Génération du réseau commercial en cours, cela peut prendre plusieurs minutes...');
+
+    try {
+        const result = await api.generateVisitsNetwork({
+            clean,
+            create_reps: createReps,
+            reps_count: repsCount,
+            create_visits: createVisits,
+            max_days: maxDays,
+        });
+        showToast('success', 'Succès', result.message);
+
+        showModal(
+            'Génération du réseau commercial terminée',
+            `<div style="color: var(--success-color); font-weight: 600; margin-bottom: 16px;">
+                ✅ ${result.message}
+            </div>
+            <details>
+                <summary style="cursor: pointer; font-weight: 500; margin-bottom: 8px;">Voir les logs</summary>
+                <pre style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; overflow-x: auto; margin-top: 8px; font-size: 12px; max-height: 400px; overflow-y: auto;">
+${result.output || 'Aucun log disponible'}
+                </pre>
+            </details>
+            <p style="margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+                Rechargez la page pour voir les statistiques mises à jour.
+            </p>`,
+            null
+        );
+
+        setTimeout(() => {
+            loadDashboard();
+        }, 1000);
+    } catch (error) {
+        console.error('Erreur génération réseau commercial:', error);
+        showToast('error', 'Erreur', error.message || 'Impossible de générer le réseau commercial');
+    }
+}
+
 // CRUD Operations
 async function viewClient(clientId) {
     try {
@@ -2652,6 +2797,412 @@ async function deleteClient(clientId) {
     } catch (error) {
         showToast('error', 'Erreur', 'Impossible de supprimer le client');
         console.error(error);
+    }
+}
+
+// Statistiques - Tableau de bord personnalisé
+const STATS_CATEGORICAL_PALETTE = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
+const STATS_ACCENT_COLOR = '#2563eb';
+const STATS_GRANULARITY_LABELS = { day: 'jour', week: 'semaine', month: 'mois', year: 'année' };
+
+async function loadStatsPage() {
+    const container = document.getElementById('stats-widgets-grid');
+    try {
+        if (!analyticsDatasets) {
+            analyticsDatasets = await api.getAnalyticsDatasets();
+        }
+        const widgets = await api.getDashboardWidgets();
+
+        if (!widgets || widgets.length === 0) {
+            container.innerHTML = `
+                <div class="stats-widgets-empty">
+                    <i class="fas fa-chart-pie"></i>
+                    <p>Aucun graphique pour l'instant.</p>
+                    <p class="help-text">Cliquez sur « Ajouter un graphique » pour construire votre tableau de bord.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = widgets.map(statsWidgetCardHTML).join('');
+        widgets.forEach(widget => loadWidgetData(widget));
+    } catch (error) {
+        console.error('Error loading stats page:', error);
+        showToast('error', 'Erreur', 'Impossible de charger le tableau de bord statistiques');
+    }
+}
+
+function statsMeasureLabel(widget) {
+    const dataset = analyticsDatasets.find(d => d.key === widget.dataset_key);
+    if (widget.aggregation === 'count' || !widget.measure_field) {
+        return "Nombre d'enregistrements";
+    }
+    const measure = dataset ? dataset.measures.find(m => m.key === widget.measure_field) : null;
+    const measureLabel = measure ? measure.label : widget.measure_field;
+    return `${widget.aggregation === 'sum' ? 'Somme' : 'Moyenne'} de ${measureLabel}`;
+}
+
+function statsWidgetTitle(widget) {
+    if (widget.title) return widget.title;
+    const dataset = analyticsDatasets.find(d => d.key === widget.dataset_key);
+    return dataset ? dataset.label : widget.dataset_key;
+}
+
+function statsWidgetSubtitle(widget) {
+    const dataset = analyticsDatasets.find(d => d.key === widget.dataset_key);
+    if (dataset && dataset.multi_measure) {
+        const seriesLabels = dataset.series.map(s => s.label).join(', ');
+        return `${seriesLabels} — top clients`;
+    }
+    const measureLabel = statsMeasureLabel(widget);
+    if (widget.chart_type === 'line') {
+        return `${measureLabel} par ${STATS_GRANULARITY_LABELS[widget.time_granularity] || 'mois'}`;
+    }
+    const dimension = dataset ? dataset.dimensions.find(d => d.key === widget.dimension_field) : null;
+    return `${measureLabel} par ${dimension ? dimension.label : widget.dimension_field}`;
+}
+
+function statsWidgetCardHTML(widget) {
+    return `
+        <div class="stats-widget-card" id="widget-card-${widget.id}">
+            <div class="stats-widget-header">
+                <div>
+                    <h3>${statsWidgetTitle(widget)}</h3>
+                    <p>${statsWidgetSubtitle(widget)}</p>
+                </div>
+                <div class="stats-widget-actions">
+                    <button class="btn-icon" onclick="toggleWidgetView(${widget.id})" title="Basculer graphique / tableau">
+                        <i class="fas fa-table" id="widget-toggle-icon-${widget.id}"></i>
+                    </button>
+                    <button class="btn-icon" onclick="deleteWidgetConfirm(${widget.id})" title="Supprimer ce graphique">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="stats-widget-body" id="widget-body-${widget.id}">
+                <canvas id="widget-canvas-${widget.id}"></canvas>
+            </div>
+            <div class="stats-widget-table-wrapper" id="widget-table-${widget.id}" style="display: none;"></div>
+        </div>
+    `;
+}
+
+async function loadWidgetData(widget) {
+    try {
+        const data = await api.queryAnalytics({
+            dataset_key: widget.dataset_key,
+            chart_type: widget.chart_type,
+            dimension_field: widget.dimension_field,
+            time_granularity: widget.time_granularity,
+            measure_field: widget.measure_field,
+            aggregation: widget.aggregation,
+            limit: (widget.chart_type === 'pie' || widget.chart_type === 'doughnut') ? 8 : 10,
+        });
+        statsWidgetData[widget.id] = data;
+        renderWidgetChart(widget, data);
+    } catch (error) {
+        console.error('Error loading widget data:', widget.id, error);
+        const body = document.getElementById(`widget-body-${widget.id}`);
+        if (body) {
+            body.innerHTML = '<p class="help-text">Impossible de charger les données de ce graphique</p>';
+        }
+    }
+}
+
+function renderWidgetChart(widget, data) {
+    const canvas = document.getElementById(`widget-canvas-${widget.id}`);
+    if (!canvas) return;
+
+    if (statsChartInstances[widget.id]) {
+        statsChartInstances[widget.id].destroy();
+    }
+
+    if (data.series) {
+        // Graphique multi-séries (ex: contrats/sinistres/chantiers par client)
+        statsChartInstances[widget.id] = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: data.series.map(s => ({
+                    label: s.label,
+                    data: s.values,
+                    backgroundColor: s.color,
+                    borderColor: s.color,
+                    borderWidth: 2,
+                })),
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, position: 'bottom' },
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#e1e0d9' } },
+                    x: { grid: { display: false } },
+                },
+            },
+        });
+    } else {
+        const isCategorical = widget.chart_type === 'pie' || widget.chart_type === 'doughnut';
+        const colors = isCategorical
+            ? data.labels.map((_, i) => STATS_CATEGORICAL_PALETTE[i % STATS_CATEGORICAL_PALETTE.length])
+            : STATS_ACCENT_COLOR;
+
+        statsChartInstances[widget.id] = new Chart(canvas, {
+            type: widget.chart_type,
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    data: data.values,
+                    backgroundColor: colors,
+                    borderColor: isCategorical ? '#fcfcfb' : STATS_ACCENT_COLOR,
+                    borderWidth: 2,
+                    tension: widget.chart_type === 'line' ? 0.3 : 0,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: isCategorical, position: 'bottom' },
+                },
+                scales: isCategorical ? {} : {
+                    y: { beginAtZero: true, grid: { color: '#e1e0d9' } },
+                    x: { grid: { display: false } },
+                },
+            },
+        });
+    }
+
+    renderWidgetTable(widget, data);
+}
+
+function renderWidgetTable(widget, data) {
+    const wrapper = document.getElementById(`widget-table-${widget.id}`);
+    if (!wrapper) return;
+
+    if (data.series) {
+        wrapper.innerHTML = `
+            <div class="data-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            ${data.series.map(s => `<th>${s.label}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.labels.map((label, i) => `
+                            <tr>
+                                <td>${label}</td>
+                                ${data.series.map(s => `<td>${formatStatsValue(s.values[i])}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        return;
+    }
+
+    wrapper.innerHTML = `
+        <div class="data-table">
+            <table>
+                <thead><tr><th>Catégorie</th><th>Valeur</th></tr></thead>
+                <tbody>
+                    ${data.labels.map((label, i) => `<tr><td>${label}</td><td>${formatStatsValue(data.values[i])}</td></tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function formatStatsValue(value) {
+    return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value || 0);
+}
+
+function toggleWidgetView(widgetId) {
+    const body = document.getElementById(`widget-body-${widgetId}`);
+    const table = document.getElementById(`widget-table-${widgetId}`);
+    const icon = document.getElementById(`widget-toggle-icon-${widgetId}`);
+    const showingTable = table.style.display !== 'none';
+
+    table.style.display = showingTable ? 'none' : 'block';
+    body.style.display = showingTable ? 'block' : 'none';
+    icon.className = showingTable ? 'fas fa-table' : 'fas fa-chart-bar';
+}
+
+async function deleteWidgetConfirm(widgetId) {
+    if (!confirm('Supprimer ce graphique du tableau de bord ?')) return;
+
+    try {
+        await api.deleteDashboardWidget(widgetId);
+        if (statsChartInstances[widgetId]) {
+            statsChartInstances[widgetId].destroy();
+            delete statsChartInstances[widgetId];
+        }
+        delete statsWidgetData[widgetId];
+        showToast('success', 'Succès', 'Graphique supprimé');
+        await loadStatsPage();
+    } catch (error) {
+        console.error(error);
+        showToast('error', 'Erreur', 'Impossible de supprimer le graphique');
+    }
+}
+
+function statsBuildMeasureOptions(dataset) {
+    let html = `<option value="count:">Nombre d'enregistrements</option>`;
+    dataset.measures.forEach(m => {
+        html += `<option value="sum:${m.key}">Somme de ${m.label}</option>`;
+        html += `<option value="avg:${m.key}">Moyenne de ${m.label}</option>`;
+    });
+    return html;
+}
+
+function statsBuildDimensionOptions(dataset) {
+    return dataset.dimensions.map(d => `<option value="${d.key}">${d.label}</option>`).join('');
+}
+
+async function openAddWidgetModal() {
+    if (!analyticsDatasets) {
+        try {
+            analyticsDatasets = await api.getAnalyticsDatasets();
+        } catch (error) {
+            showToast('error', 'Erreur', 'Impossible de charger les sources de données');
+            return;
+        }
+    }
+
+    const bodyHtml = `
+        <div class="form-group">
+            <label>Titre (optionnel)</label>
+            <input type="text" id="new-widget-title" placeholder="Ex : Sinistres par type">
+        </div>
+        <div class="form-group">
+            <label>Source de données</label>
+            <select id="new-widget-dataset" onchange="updateAddWidgetFields()">
+                ${analyticsDatasets.map(d => `<option value="${d.key}">${d.label}</option>`).join('')}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type de graphique</label>
+            <select id="new-widget-chart-type" onchange="updateAddWidgetFields()">
+                <option value="bar">Barres</option>
+                <option value="pie">Camembert</option>
+                <option value="doughnut">Anneau</option>
+                <option value="line">Courbe (évolution dans le temps)</option>
+            </select>
+        </div>
+        <div id="new-widget-fields"></div>
+    `;
+
+    showModal('Ajouter un graphique', bodyHtml, saveNewWidget);
+    updateAddWidgetFields();
+}
+
+function updateAddWidgetFields() {
+    const datasetKey = document.getElementById('new-widget-dataset').value;
+    const chartTypeSelect = document.getElementById('new-widget-chart-type');
+    const dataset = analyticsDatasets.find(d => d.key === datasetKey);
+    const container = document.getElementById('new-widget-fields');
+    if (!dataset || !container) return;
+
+    if (dataset.multi_measure) {
+        chartTypeSelect.value = 'bar';
+        chartTypeSelect.disabled = true;
+        container.innerHTML = `
+            <p class="help-text">
+                Affiche, pour les clients les plus actifs, ${dataset.series.map(s => s.label.toLowerCase()).join(', ')}
+                — un graphique en barres groupées, sans champ à choisir.
+            </p>
+        `;
+        return;
+    }
+    chartTypeSelect.disabled = false;
+
+    const chartType = chartTypeSelect.value;
+    const measureOptions = statsBuildMeasureOptions(dataset);
+
+    if (chartType === 'line') {
+        container.innerHTML = `
+            <div class="form-group">
+                <label>Champ temporel</label>
+                <input type="text" value="${dataset.time_field ? dataset.time_field.label : 'Non disponible'}" disabled>
+            </div>
+            <div class="form-group">
+                <label>Granularité</label>
+                <select id="new-widget-granularity">
+                    <option value="day">Jour</option>
+                    <option value="month" selected>Mois</option>
+                    <option value="year">Année</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Mesure</label>
+                <select id="new-widget-measure">${measureOptions}</select>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="form-group">
+                <label>Regrouper par</label>
+                <select id="new-widget-dimension">${statsBuildDimensionOptions(dataset)}</select>
+            </div>
+            <div class="form-group">
+                <label>Mesure</label>
+                <select id="new-widget-measure">${measureOptions}</select>
+            </div>
+        `;
+    }
+}
+
+async function saveNewWidget() {
+    const datasetKey = document.getElementById('new-widget-dataset').value;
+    const dataset = analyticsDatasets.find(d => d.key === datasetKey);
+    const title = document.getElementById('new-widget-title').value.trim();
+
+    let widget;
+
+    if (dataset && dataset.multi_measure) {
+        widget = {
+            title: title || null,
+            dataset_key: datasetKey,
+            chart_type: 'bar',
+            aggregation: 'count',
+            measure_field: null,
+            dimension_field: null,
+            time_granularity: null,
+        };
+    } else {
+        const chartType = document.getElementById('new-widget-chart-type').value;
+        const [aggregation, measureField] = document.getElementById('new-widget-measure').value.split(':');
+
+        widget = {
+            title: title || null,
+            dataset_key: datasetKey,
+            chart_type: chartType,
+            aggregation,
+            measure_field: measureField || null,
+            dimension_field: null,
+            time_granularity: null,
+        };
+
+        if (chartType === 'line') {
+            widget.time_granularity = document.getElementById('new-widget-granularity').value;
+        } else {
+            widget.dimension_field = document.getElementById('new-widget-dimension').value;
+        }
+    }
+
+    try {
+        await api.createDashboardWidget(widget);
+        closeModal();
+        showToast('success', 'Succès', 'Graphique ajouté au tableau de bord');
+        await loadStatsPage();
+    } catch (error) {
+        console.error(error);
+        showToast('error', 'Erreur', 'Impossible de créer le graphique');
     }
 }
 

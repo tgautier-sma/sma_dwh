@@ -11,10 +11,11 @@
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#2563eb">
     <meta name="description" content="Application de gestion des sinistres construction - Mode hors ligne disponible">
-    <link rel="stylesheet" href="/static/styles.css?v=4">
+    <link rel="stylesheet" href="/static/styles.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="/static/db-manager.js"></script>
 </head>
 <body>
@@ -164,6 +165,10 @@
                     <i class="fas fa-database"></i>
                     <span>Référentiels</span>
                 </a>
+                <a href="#" class="nav-item" data-view="stats">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Statistiques</span>
+                </a>
                 <div class="nav-group">
                     <a href="#" class="nav-item nav-group-toggle">
                         <i class="fas fa-question-circle"></i>
@@ -222,6 +227,11 @@
             <div class="content-body">
                 <!-- Dashboard View -->
                 <div id="dashboard-view" class="view active">
+                    <div class="dashboard-toolbar">
+                        <button id="btn-refresh-stats" class="btn btn-secondary btn-sm" onclick="refreshDashboardStats(this)">
+                            <i class="fas fa-sync-alt"></i> Actualiser les stats
+                        </button>
+                    </div>
                     <div class="stats-grid">
                         <div class="stat-card" data-view="clients">
                             <div class="stat-icon bg-blue">
@@ -296,6 +306,10 @@
                         <div class="dashboard-card">
                             <h3><i class="fas fa-exclamation-triangle"></i> Alertes</h3>
                             <div id="alerts-list" class="alerts-list"></div>
+                        </div>
+                        <div class="dashboard-card">
+                            <h3><i class="fas fa-database"></i> Espace disque par entité</h3>
+                            <div id="storage-usage-list" class="storage-usage-list"></div>
                         </div>
                     </div>
                 </div>
@@ -695,6 +709,18 @@
                 <div id="generate-view" class="view">
                     <div class="generate-container">
                         <div class="generate-card">
+                            <h3><i class="fas fa-database"></i> Données de référence</h3>
+                            <p class="help-text">
+                                Initialise les référentiels (types de contrats, garanties, clauses, catégories de bâtiments/travaux, professions, exclusions).
+                                Sans danger : peut être relancé à tout moment, les données déjà présentes ne sont pas dupliquées.
+                            </p>
+
+                            <button class="btn btn-primary btn-large" onclick="initReferentialData()">
+                                <i class="fas fa-database"></i> Initialiser les référentiels
+                            </button>
+                        </div>
+
+                        <div class="generate-card">
                             <h3><i class="fas fa-magic"></i> Génération de données de test</h3>
                             
                             <div class="form-group">
@@ -750,6 +776,46 @@
                             </button>
                         </div>
 
+                        <div class="generate-card">
+                            <h3><i class="fas fa-route"></i> Réseau commercial (commerciaux, visites, propositions)</h3>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="gen-visits-create-reps" checked>
+                                    Créer des commerciaux
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="gen-visits-reps-count">Nombre de commerciaux à créer</label>
+                                <input type="number" id="gen-visits-reps-count" min="1" max="300" value="20">
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="gen-visits-create-visits" checked>
+                                    Générer les visites, propositions et souscriptions
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="gen-visits-max-days">Limiter aux N derniers jours ouvrés</label>
+                                <input type="number" id="gen-visits-max-days" min="1" max="365" value="30">
+                                <p class="help-text">Réduisez cette valeur pour une génération plus rapide, augmentez-la (ou videz le champ) pour couvrir une période plus large.</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="gen-visits-clean">
+                                    Nettoyer le réseau commercial existant avant génération (commerciaux, visites, propositions)
+                                </label>
+                            </div>
+
+                            <button class="btn btn-primary btn-large" onclick="generateVisitsNetwork()">
+                                <i class="fas fa-route"></i> Générer le réseau commercial
+                            </button>
+                        </div>
+
                         <div class="generate-card danger-zone">
                             <h3><i class="fas fa-exclamation-triangle"></i> Zone dangereuse</h3>
                             
@@ -799,6 +865,16 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Stats View -->
+            <div id="stats-view" class="view">
+                <div class="view-toolbar">
+                    <div></div>
+                    <button class="btn btn-primary" onclick="openAddWidgetModal()">
+                        <i class="fas fa-plus"></i> Ajouter un graphique
+                    </button>
+                </div>
+                <div id="stats-widgets-grid" class="stats-widgets-grid"></div>
             </div>
 
             <!-- About View -->
@@ -988,6 +1064,7 @@
                     </div>
                 </div>
             </div>
+            </div>
         </main>
     </div>
 
@@ -1031,10 +1108,10 @@
         </div>
     </div>
 
-    <script src="/static/api.js?v=6"></script>
+    <script src="/static/api.js?v=8"></script>
     <script src="/static/phonetic.js?v=5"></script>
     <script src="/static/sync-manager.js"></script>
-    <script src="/static/app.js?v=6"></script>
+    <script src="/static/app.js?v=8"></script>
     
     <!-- Service Worker Registration -->
     <script>

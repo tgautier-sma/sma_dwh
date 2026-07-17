@@ -18,6 +18,7 @@ services:
       - ./frontend:/app/frontend
       - ./main.py:/app/main.py
       - ./generate_client_data.py:/app/generate_client_data.py
+      - ./manage_database.py:/app/manage_database.py
       - ./logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

@@ -1737,6 +1737,29 @@ class MermaidDiagram(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     created_by = Column(String(100), nullable=True)
+
+
+# =============================================================================
+# TABLEAU DE BORD STATISTIQUES PERSONNALISÉ
+# =============================================================================
+
+class DashboardWidgetModel(Base):
+    """Widget d'un tableau de bord statistiques configuré par l'utilisateur"""
+    __tablename__ = "dashboard_widgets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(200), nullable=True)  # Titre personnalisé, sinon généré
+    dataset_key = Column(String(50), nullable=False)  # clients, contracts, claims, ...
+    chart_type = Column(String(20), nullable=False)  # bar, line, pie, doughnut
+    dimension_field = Column(String(100), nullable=True)  # Champ de regroupement (bar/pie/doughnut)
+    time_granularity = Column(String(10), nullable=True)  # day, week, month, year (line)
+    measure_field = Column(String(100), nullable=True)  # Champ numérique agrégé, null = comptage
+    aggregation = Column(String(10), nullable=False, default="count")  # count, sum, avg
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<DashboardWidget(dataset={self.dataset_key}, chart_type={self.chart_type})>"
     
     def __repr__(self):
         return f"<MermaidDiagram(id={self.id}, title={self.title})>"

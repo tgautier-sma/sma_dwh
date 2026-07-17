@@ -860,3 +860,32 @@ class MermaidDiagram(MermaidDiagramBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# SCHÉMAS TABLEAU DE BORD STATISTIQUES
+# =============================================================================
+
+class DashboardWidgetBase(BaseModel):
+    """Schéma de base pour un widget de tableau de bord"""
+    title: Optional[str] = Field(None, max_length=200, description="Titre personnalisé du graphique")
+    dataset_key: str = Field(..., description="Source de données (clients, contracts, claims, ...)")
+    chart_type: str = Field(..., description="Type de graphique: bar, line, pie, doughnut")
+    dimension_field: Optional[str] = Field(None, description="Champ de regroupement (bar/pie/doughnut)")
+    time_granularity: Optional[str] = Field(None, description="Granularité temporelle: day, week, month, year (line)")
+    measure_field: Optional[str] = Field(None, description="Champ numérique agrégé, absent = comptage")
+    aggregation: str = Field("count", description="Agrégation: count, sum, avg")
+
+
+class DashboardWidgetCreate(DashboardWidgetBase):
+    """Schéma pour créer un widget"""
+    pass
+
+
+class DashboardWidget(DashboardWidgetBase):
+    """Schéma complet d'un widget"""
+    id: int
+    position: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

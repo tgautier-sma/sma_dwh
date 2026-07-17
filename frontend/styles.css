@@ -428,13 +428,6 @@ body {
     display: block;
 }
 
-#about-view.active {
-    display: block;
-    overflow-y: auto;
-    max-height: 100%;
-    padding-bottom: 40px;
-}
-
 /* Stats Grid */
 .stats-grid {
     display: grid;
@@ -488,6 +481,116 @@ body {
 .stat-content p {
     color: var(--text-secondary);
     font-size: 14px;
+}
+
+/* Statistiques - Tableau de bord personnalisé */
+.stats-widgets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 24px;
+}
+
+.stats-widgets-empty {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-secondary);
+}
+
+.stats-widgets-empty i {
+    font-size: 40px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.stats-widget-card {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.stats-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.stats-widget-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.stats-widget-header p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.stats-widget-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.stats-widget-body {
+    position: relative;
+    height: 280px;
+}
+
+.stats-widget-table-wrapper {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+/* Dashboard Toolbar */
+.dashboard-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+}
+
+/* Storage usage */
+.storage-usage-row {
+    margin-bottom: 14px;
+}
+
+.storage-usage-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.storage-usage-size {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.storage-usage-bar {
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    height: 8px;
+    overflow: hidden;
+}
+
+.storage-usage-bar-fill {
+    background: var(--primary-color);
+    height: 100%;
+    border-radius: 6px;
+}
+
+.storage-usage-total {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
 }
 
 /* Dashboard Grid */
