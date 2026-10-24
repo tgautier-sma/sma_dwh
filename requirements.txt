@@ -10,8 +10,8 @@ psycopg2-binary==2.9.10
 alembic==1.14.0
 
 # Utilitaires
-python-dotenv==1.0.1
-python-multipart==0.0.12
+python-dotenv==1.2.2
+python-multipart==0.0.31
 Faker==30.8.2
 httpx==0.28.1
 
