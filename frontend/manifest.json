@@ -1,6 +1,6 @@
 {
-  "name": "SMA DWH - Gestion Sinistres",
-  "short_name": "SMA DWH",
+  "name": "SMA Fake DWH - Gestion Sinistres",
+  "short_name": "SMA Fake DWH",
   "description": "Application de gestion des sinistres construction - Mode hors ligne disponible",
   "start_url": "/",
   "display": "standalone",

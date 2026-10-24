@@ -20,9 +20,15 @@ class Settings(BaseSettings):
     
     # API
     API_TITLE: str = "API Gestion Assurance Construction"
-    API_VERSION: str = "1.0.0"
+    API_VERSION: str = "1.1.0"
     API_DESCRIPTION: str = "API pour gérer les contrats d'assurance construction, clients et référentiels"
     
+    # IA (LiteLLM, API compatible OpenAI)
+    LITELLM_BASE_URL: str = "https://ai.proxy.gautiersa.fr"
+    LITELLM_API_KEY: str = ""
+    LITELLM_MODEL: str = "mistral/mistral-large-latest"
+    LITELLM_TIMEOUT: float = 120.0
+
     # CORS
     CORS_ORIGINS: list = ["*"]
     

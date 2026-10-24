@@ -122,6 +122,8 @@ view_logs() {
 
 # Check service health
 check_health() {
+    # Port publié par docker-compose.yml (8100:8000), surchargeable via APP_URL_PORT
+    local APP_URL_PORT="${APP_URL_PORT:-8100}"
     print_header "Checking Service Health"
     
     # Wait for services to be ready
@@ -130,15 +132,15 @@ check_health() {
     local attempt=0
     
     while [ $attempt -lt $max_attempts ]; do
-        if curl -s -f http://localhost:8000/health > /dev/null 2>&1; then
+        if curl -s -f http://localhost:${APP_URL_PORT}/health > /dev/null 2>&1; then
             print_success "Application is healthy"
             
             # Show service URLs
             echo ""
             print_info "Service URLs:"
-            echo "  📱 Application: http://localhost:8000"
-            echo "  📚 API Documentation: http://localhost:8000/docs"
-            echo "  🔍 API Redoc: http://localhost:8000/redoc"
+            echo "  📱 Application: http://localhost:${APP_URL_PORT}"
+            echo "  📚 API Documentation: http://localhost:${APP_URL_PORT}/docs"
+            echo "  🔍 API Redoc: http://localhost:${APP_URL_PORT}/redoc"
             echo ""
             
             return 0

@@ -546,6 +546,22 @@ class API {
         });
     }
 
+    // Analyse IA (Mistral via LiteLLM)
+    async getAIModels() {
+        return this.request('/ai/models');
+    }
+
+    async getAIRelations() {
+        return this.request('/ai/relations');
+    }
+
+    async analyzeWithAI(config) {
+        return this.request('/ai/analyze', {
+            method: 'POST',
+            body: JSON.stringify(config),
+        });
+    }
+
     async getDashboardWidgets() {
         return this.request('/analytics/widgets');
     }
@@ -738,6 +754,13 @@ class API {
                 clean: clean
             })
         });
+    }
+
+    async getJob(jobId) {
+        // fetch direct : pas de cache hors ligne pour le suivi de progression
+        const response = await fetch(`${this.baseUrl}/jobs/${jobId}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
     }
 
     async generateClaims(count, clean) {

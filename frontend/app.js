@@ -116,6 +116,7 @@ function switchView(viewName) {
         generate: { title: 'Génération de données', subtitle: 'Outils de génération et suppression de données' },
         referentials: { title: 'Référentiels', subtitle: 'Gestion des données de référence' },
         stats: { title: 'Statistiques', subtitle: 'Construisez votre tableau de bord en choisissant vos données et graphiques' },
+        'ai-analysis': { title: 'Analyse IA', subtitle: 'Analyse des données par l\'IA Mistral' },
         about: { title: 'À propos', subtitle: 'Informations sur l\'application et les technologies utilisées' },
     };
     
@@ -229,6 +230,9 @@ async function loadViewData(viewName) {
             break;
         case 'stats':
             await loadStatsPage();
+            break;
+        case 'ai-analysis':
+            await loadAIAnalysisPage();
             break;
         case 'about':
             // Page statique, pas de données à charger
@@ -2394,6 +2398,84 @@ async function loadReferentials() {
     }
 }
 
+// Suivi de progression des générations (tâches en arrière-plan côté serveur)
+function formatJobCounts(job) {
+    const plan = job.plan || {};
+    const counts = job.counts || {};
+    const n = (v) => Number(v || 0).toLocaleString('fr-FR');
+    const rows = [];
+    for (const unit of ['clients', 'sinistres']) {
+        if (plan[unit] != null) rows.push(`<b>${unit}</b> : ${n(counts[unit])} / ${n(plan[unit])} à créer`);
+    }
+    if (plan.days != null) {
+        const period = plan.start ? ` (${plan.start} → ${plan.end})` : '';
+        rows.push(`<b>Jours ouvrés</b> : ${n(counts.day)} / ${n(plan.days)}${period}`);
+        rows.push(`<b>Visites</b> : ${n(counts.visits)} / ~${n(plan.expected_visits)} prévues (${n(plan.reps)} commerciaux)`);
+        rows.push(`<b>Propositions</b> : ${n(counts.proposals)} &nbsp; <b>Souscriptions</b> : ${n(counts.contracts)}`);
+    } else if (plan.reps != null) {
+        rows.push(`<b>Commerciaux</b> à créer : ${n(plan.reps)}`);
+    }
+    return rows.map(r => `<div>${r}</div>`).join('');
+}
+
+async function runGenerationJob(startFn, title) {
+    const panel = document.createElement('div');
+    panel.className = 'job-progress-panel';
+    panel.innerHTML = `
+        <div class="job-progress-title"><i class="fas fa-spinner fa-spin"></i> <span>${escapeHtmlText(title)}</span>
+            <span class="job-progress-elapsed"></span></div>
+        <div class="progress-bar"><div class="job-progress-fill indeterminate"></div></div>
+        <div class="job-progress-step">Démarrage...</div>
+        <div class="job-progress-counts"></div>
+        <pre class="job-progress-log"></pre>`;
+    document.body.appendChild(panel);
+    const fill = panel.querySelector('.job-progress-fill');
+    const stepEl = panel.querySelector('.job-progress-step');
+    const logEl = panel.querySelector('.job-progress-log');
+    const elapsedEl = panel.querySelector('.job-progress-elapsed');
+    const countsEl = panel.querySelector('.job-progress-counts');
+
+    const render = (job) => {
+        if (job.percent === null || job.percent === undefined) {
+            fill.classList.add('indeterminate');
+            fill.style.width = '';
+        } else {
+            fill.classList.remove('indeterminate');
+            fill.style.width = `${job.percent}%`;
+        }
+        const pct = job.percent != null ? ` — ${Math.round(job.percent)} %` : '';
+        stepEl.textContent = (job.step || '') + pct;
+        countsEl.innerHTML = formatJobCounts(job);
+        elapsedEl.textContent = `${Math.round(job.elapsed_seconds)} s`;
+        const lines = (job.output || '').split('\n').slice(-8).join('\n');
+        logEl.textContent = lines;
+        logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    try {
+        const started = await startFn();
+        let job = started.job;
+        render(job);
+        let failures = 0;
+        while (job.status === 'running') {
+            await new Promise(r => setTimeout(r, 1000));
+            try {
+                job = await api.getJob(started.job_id);
+                failures = 0;
+                render(job);
+            } catch (e) {
+                if (++failures >= 15) throw new Error('Suivi de progression interrompu : ' + e.message);
+            }
+        }
+        if (job.status === 'error') {
+            throw new Error(job.message || 'Erreur lors de la génération');
+        }
+        return job;
+    } finally {
+        panel.remove();
+    }
+}
+
 // Data Generation
 async function generateData() {
     const count = parseInt(document.getElementById('gen-count').value);
@@ -2409,7 +2491,7 @@ async function generateData() {
     showToast('info', 'Génération en cours', 'Le script est en cours d\'exécution...');
     
     try {
-        const result = await api.generateData(count, type, clean);
+        const result = await runGenerationJob(() => api.generateData(count, type, clean), 'Génération des clients');
         showToast('success', 'Succès', result.message);
         
         // Afficher les détails dans une modale
@@ -2495,7 +2577,7 @@ async function generateClaims() {
     showToast('info', 'Génération en cours', 'Génération des sinistres...');
     
     try {
-        const result = await api.generateClaims(count, clean);
+        const result = await runGenerationJob(() => api.generateClaims(count, clean), 'Génération des sinistres');
         showToast('success', 'Succès', result.message);
         
         // Afficher les détails dans une modale
@@ -2546,16 +2628,52 @@ ${result.output || 'Aucun log disponible'}
     }
 }
 
+function countBusinessDays(start, end) {
+    let count = 0;
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    while (d <= last) {
+        const day = d.getDay();
+        if (day !== 0 && day !== 6) count++;
+        d.setDate(d.getDate() + 1);
+    }
+    return count;
+}
+
+// Jours ouvrés (lun-ven) entre la date de début saisie et aujourd'hui
+function updateVisitsBusinessDays() {
+    const startInput = document.getElementById('gen-visits-start-date');
+    const daysInput = document.getElementById('gen-visits-max-days');
+    if (!startInput.value) {
+        daysInput.value = 30;
+        return;
+    }
+    const start = new Date(startInput.value + 'T00:00:00');
+    const days = countBusinessDays(start, new Date());
+    if (days < 1) {
+        showToast('warning', 'Date invalide', 'La date de début doit être antérieure ou égale à aujourd\'hui');
+        daysInput.value = '';
+        return;
+    }
+    daysInput.value = days;
+}
+
 async function generateVisitsNetwork() {
     const createReps = document.getElementById('gen-visits-create-reps').checked;
-    const repsCount = parseInt(document.getElementById('gen-visits-reps-count').value);
+    const repsCount = parseInt(document.getElementById('gen-visits-reps-count').value) || 20;
     const createVisits = document.getElementById('gen-visits-create-visits').checked;
     const maxDaysValue = document.getElementById('gen-visits-max-days').value;
     const maxDays = maxDaysValue ? parseInt(maxDaysValue) : null;
+    const visitsPerDay = parseInt(document.getElementById('gen-visits-per-day').value) || null;
+    const startDate = document.getElementById('gen-visits-start-date').value || null;
     const clean = document.getElementById('gen-visits-clean').checked;
 
     if (!createReps && !createVisits && !clean) {
         showToast('warning', 'Aucune action', 'Sélectionnez au moins une action à effectuer');
+        return;
+    }
+    if (createReps && (repsCount < 1 || repsCount > 300)) {
+        showToast('warning', 'Valeur invalide', 'Le nombre de commerciaux doit être compris entre 1 et 300');
         return;
     }
 
@@ -2569,13 +2687,15 @@ async function generateVisitsNetwork() {
     showToast('info', 'Génération en cours', 'Génération du réseau commercial en cours, cela peut prendre plusieurs minutes...');
 
     try {
-        const result = await api.generateVisitsNetwork({
+        const result = await runGenerationJob(() => api.generateVisitsNetwork({
             clean,
             create_reps: createReps,
-            reps_count: repsCount,
+            reps_count: createReps ? repsCount : 0,
             create_visits: createVisits,
             max_days: maxDays,
-        });
+            start_date: startDate,
+            visits_per_day: visitsPerDay,
+        }), 'Génération du réseau commercial');
         showToast('success', 'Succès', result.message);
 
         showModal(
@@ -4407,4 +4527,309 @@ function showProfessionModal(data = null) {
             showToast('error', 'Erreur', error.message || 'Impossible de créer la profession');
         }
     });
+}
+
+
+// Analyse IA (Mistral via LiteLLM)
+function renderMarkdown(text) {
+    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const inline = line => line
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>');
+    const cells = line => line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+    const lines = escaped.split('\n');
+    let html = '';
+    let listTag = null;
+    const closeList = () => { if (listTag) { html += `</${listTag}>`; listTag = null; } };
+
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const line = raw.trim();
+        if (line.startsWith('|') && i + 1 < lines.length && /^\|?[\s:|-]+\|?$/.test(lines[i + 1].trim())) {
+            const head = cells(line).map(c => `<th>${inline(c)}</th>`).join('');
+            let rows = '';
+            i += 2;
+            while (i < lines.length && lines[i].trim().startsWith('|')) {
+                rows += `<tr>${cells(lines[i].trim()).map(c => `<td>${inline(c)}</td>`).join('')}</tr>`;
+                i++;
+            }
+            i--;
+            closeList();
+            html += `<div class="ai-table-wrapper"><table class="ai-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+            continue;
+        }
+        const bullet = line.match(/^[-*]\s+(.*)/);
+        const numbered = line.match(/^\d+[.)]\s+(.*)/);
+        if (bullet || numbered) {
+            const tag = numbered ? 'ol' : 'ul';
+            if (listTag !== tag) { closeList(); html += `<${tag}>`; listTag = tag; }
+            const nested = /^\s{2,}/.test(raw) ? ' class="nested"' : '';
+            html += `<li${nested}>${inline((bullet || numbered)[1])}</li>`;
+            continue;
+        }
+        closeList();
+        const heading = line.match(/^(#{1,6})\s+(.*)/);
+        if (heading) {
+            const level = Math.min(heading[1].length + 1, 5);
+            html += `<h${level} class="ai-h">${inline(heading[2])}</h${level}>`;
+        } else if (/^-{3,}$/.test(line)) html += '<hr>';
+        else if (line.startsWith('&gt;')) html += `<blockquote>${inline(line.replace(/^&gt;\s?/, ''))}</blockquote>`;
+        else if (line) html += `<p>${inline(line)}</p>`;
+    }
+    closeList();
+    return html;
+}
+
+async function copyAIAnswer() {
+    try {
+        await navigator.clipboard.writeText(document.getElementById('ai-answer-raw').value);
+        showToast('success', 'Analyse IA', 'Réponse copiée dans le presse-papiers');
+    } catch (error) {
+        showToast('error', 'Analyse IA', 'Copie impossible');
+    }
+}
+
+const AI_PRESETS = [
+    { label: 'Synthèse générale', dataset: null, question: 'Fais une synthèse générale de ces données en 5 points clés chiffrés.' },
+    { label: 'Anomalies', dataset: null, question: 'Identifie les anomalies, valeurs atypiques ou déséquilibres dans ces données et explique pourquoi ils méritent attention.' },
+    { label: 'Tendances', dataset: null, type: 'chart', question: 'Montre l\'évolution mensuelle sous forme de courbe et commente les tendances, la saisonnalité et les ruptures.' },
+    { label: 'Risques sinistres', dataset: 'claims', question: 'Quels types de sinistres et quelles zones concentrent le plus de risque ? Propose 3 actions de prévention.' },
+    { label: 'Rentabilité contrats', dataset: 'contracts', question: 'Évalue le portefeuille de contrats : répartition des primes, concentration, et pistes d\'optimisation tarifaire.' },
+    { label: 'Performance commerciale', dataset: 'visits', question: 'Analyse l\'activité commerciale : volume, durée et satisfaction des visites. Quels axes d\'amélioration ?' },
+    { label: 'Conversion propositions', dataset: 'proposals', question: 'Analyse les propositions par statut et type de contrat. Que peut-on dire de la conversion ?' },
+    { label: 'Top clients', dataset: 'clients_activity', type: 'table', question: 'Présente les clients les plus actifs avec leurs contrats, sinistres et chantiers, et un ratio sinistres/contrats.' },
+    { label: 'Répartition graphique', dataset: null, type: 'chart', question: 'Illustre la répartition la plus significative de ces données par un graphique.' },
+    { label: 'Tableau de synthèse', dataset: null, type: 'table', question: 'Construis un tableau de synthèse des indicateurs clés (effectifs, montants, moyennes).' },
+];
+
+let aiRelations = [];
+
+function aiCheckedRelations() {
+    return [...document.querySelectorAll('#ai-joins input:checked')].map(i => i.value);
+}
+
+// Sources atteignables depuis la source principale via les jointures cochées
+function aiIncludedDatasets(base, checked) {
+    const included = new Set([base]);
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const rel of aiRelations.filter(r => checked.includes(r.key))) {
+            if (included.has(rel.child) !== included.has(rel.parent)) {
+                included.add(rel.child);
+                included.add(rel.parent);
+                changed = true;
+            }
+        }
+    }
+    return included;
+}
+
+function refreshAIJoins() {
+    const base = document.getElementById('ai-dataset').value;
+    const section = document.getElementById('ai-joins-section');
+    const baseDataset = analyticsDatasets.find(d => d.key === base);
+    section.style.display = baseDataset && baseDataset.multi_measure ? 'none' : '';
+    if (section.style.display === 'none') return;
+
+    // Décocher les jointures qui ne sont plus reliées à la source principale
+    const reachable = aiIncludedDatasets(base, aiCheckedRelations());
+    const connected = new Set(aiCheckedRelations().filter(key => {
+        const rel = aiRelations.find(r => r.key === key);
+        return reachable.has(rel.child) && reachable.has(rel.parent);
+    }));
+    const included = aiIncludedDatasets(base, [...connected]);
+
+    document.getElementById('ai-joins').innerHTML = aiRelations
+        .filter(r => included.has(r.child) || included.has(r.parent))
+        .map(r => `<label class="ai-join-item">
+            <input type="checkbox" value="${r.key}" ${connected.has(r.key) ? 'checked' : ''} onchange="refreshAIJoins()">
+            ${r.label}</label>`).join('') || '<span class="ai-note">Aucune jointure disponible pour cette source.</span>';
+
+    const options = ['<option value="">— aucun —</option>'];
+    for (const key of included) {
+        const dataset = analyticsDatasets.find(d => d.key === key);
+        for (const dim of dataset.dimensions) {
+            options.push(`<option value="${key}.${dim.key}">${dataset.label} · ${dim.label}</option>`);
+        }
+    }
+    ['ai-group-1', 'ai-group-2'].forEach(id => {
+        const select = document.getElementById(id);
+        const previous = select.value;
+        select.innerHTML = options.join('');
+        if ([...select.options].some(o => o.value === previous)) select.value = previous;
+    });
+}
+
+function applyAIPreset(index) {
+    const preset = AI_PRESETS[index];
+    if (preset.dataset) {
+        document.getElementById('ai-dataset').value = preset.dataset;
+        refreshAIJoins();
+    }
+    document.getElementById('ai-question').value = preset.question;
+    const type = preset.type || 'text';
+    document.querySelector(`input[name="ai-response-type"][value="${type}"]`).checked = true;
+}
+
+function aiDetailsHTML(response) {
+    const usage = response.usage || {};
+    const messages = response.request.messages
+        .map(m => `<h5>${m.role}</h5><pre>${escapeHtmlText(m.content)}</pre>`).join('');
+    return `
+        <div class="ai-stats">
+            <span><i class="fas fa-microchip"></i> ${escapeHtmlText(response.model)}</span>
+            <span><i class="fas fa-stopwatch"></i> ${(response.elapsed_ms / 1000).toFixed(2)} s</span>
+            <span><i class="fas fa-arrow-up"></i> ${usage.prompt_tokens ?? '?'} tokens envoyés</span>
+            <span><i class="fas fa-arrow-down"></i> ${usage.completion_tokens ?? '?'} tokens reçus</span>
+            <span><i class="fas fa-coins"></i> ${usage.total_tokens ?? '?'} tokens au total</span>
+        </div>
+        <details class="ai-request">
+            <summary>Requête envoyée à l'IA</summary>
+            <p class="ai-meta">modèle : ${escapeHtmlText(response.request.model)} · température : ${response.request.temperature}</p>
+            ${messages}
+        </details>`;
+}
+
+function escapeHtmlText(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function loadAIAnalysisPage() {
+    const presets = document.getElementById('ai-presets');
+    if (!presets.children.length) {
+        presets.innerHTML = AI_PRESETS.map((p, i) =>
+            `<button type="button" class="btn btn-sm btn-secondary" onclick="applyAIPreset(${i})">${p.label}</button>`).join('');
+    }
+    const datasetSelect = document.getElementById('ai-dataset');
+    const modelSelect = document.getElementById('ai-model');
+    try {
+        if (!analyticsDatasets) {
+            analyticsDatasets = await api.getAnalyticsDatasets();
+        }
+        if (!datasetSelect.options.length) {
+            datasetSelect.innerHTML = analyticsDatasets.map(d => `<option value="${d.key}">${d.label}</option>`).join('');
+        }
+        if (!aiRelations.length) {
+            aiRelations = await api.getAIRelations();
+        }
+        datasetSelect.onchange = refreshAIJoins;
+        refreshAIJoins();
+        if (!modelSelect.options.length) {
+            const { models, default: defaultModel } = await api.getAIModels();
+            modelSelect.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+            if (models.includes(defaultModel)) modelSelect.value = defaultModel;
+        }
+    } catch (error) {
+        console.error('Error loading AI analysis page:', error);
+        showToast('error', 'Analyse IA', `Modèles indisponibles : ${error.message}`);
+    }
+}
+
+let aiChartInstance = null;
+
+function aiRenderChart(structured) {
+    const palette = ['#4a3aa7', '#e34948', '#eb6834', '#2e9e6b', '#2f80c9', '#c9a227', '#8e5ea2', '#5f6b7a'];
+    const type = structured.chart_type;
+    const circular = type === 'pie' || type === 'doughnut';
+    const datasets = structured.datasets.map((ds, i) => ({
+        label: ds.label || `Série ${i + 1}`,
+        data: ds.data,
+        backgroundColor: circular ? structured.labels.map((_, j) => palette[j % palette.length]) : palette[i % palette.length],
+        borderColor: circular ? '#fff' : palette[i % palette.length],
+        tension: 0.3,
+        fill: false,
+    }));
+    if (aiChartInstance) aiChartInstance.destroy();
+    aiChartInstance = new Chart(document.getElementById('ai-chart-canvas'), {
+        type,
+        data: { labels: structured.labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: !!structured.title, text: structured.title },
+                legend: { display: circular || datasets.length > 1 },
+            },
+        },
+    });
+}
+
+function aiTableHTML(structured) {
+    const fmt = v => typeof v === 'number' ? v.toLocaleString('fr-FR') : escapeHtmlText(v ?? '');
+    const head = structured.columns.map(c => `<th>${escapeHtmlText(c)}</th>`).join('');
+    const rows = structured.rows.map(r =>
+        `<tr>${r.map(v => `<td${typeof v === 'number' ? ' class="num"' : ''}>${fmt(v)}</td>`).join('')}</tr>`).join('');
+    return `<div class="ai-table-wrapper"><table class="ai-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function exportAITableCSV() {
+    const { columns, rows, title } = window.aiLastStructured;
+    const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [columns, ...rows].map(r => r.map(cell).join(';')).join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = `${(title || 'tableau').replace(/[^\w-]+/g, '_')}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+function aiResultBodyHTML(response) {
+    const structured = response.structured;
+    const type = response.response_type;
+    const commentary = structured && structured.commentary
+        ? `<div class="ai-answer ai-commentary">${renderMarkdown(String(structured.commentary))}</div>` : '';
+
+    if (type === 'chart' && structured) {
+        return `<div class="ai-chart-box"><canvas id="ai-chart-canvas"></canvas></div>${commentary}`;
+    }
+    if (type === 'table' && structured) {
+        return `${structured.title ? `<h4 class="ai-h">${escapeHtmlText(structured.title)}</h4>` : ''}${aiTableHTML(structured)}${commentary}`;
+    }
+    const warning = type !== 'text'
+        ? '<div class="ai-warning"><i class="fas fa-triangle-exclamation"></i> Le modèle n\'a pas renvoyé un format exploitable : affichage de la réponse brute.</div>' : '';
+    return `${warning}<div class="ai-answer">${renderMarkdown(response.analysis)}</div>`;
+}
+
+async function runAIAnalysis() {
+    const button = document.getElementById('btn-ai-analyze');
+    const result = document.getElementById('ai-result');
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyse en cours...';
+    result.style.display = 'none';
+    try {
+        const response = await api.analyzeWithAI({
+            dataset_key: document.getElementById('ai-dataset').value,
+            relations: aiCheckedRelations(),
+            group_by: ['ai-group-1', 'ai-group-2'].map(id => document.getElementById(id).value).filter(Boolean),
+            model: document.getElementById('ai-model').value || null,
+            question: document.getElementById('ai-question').value || null,
+            response_type: document.querySelector('input[name="ai-response-type"]:checked').value,
+        });
+        const structuredOk = !!response.structured;
+        const titles = { text: 'Analyse', chart: 'Graphique', table: 'Tableau' };
+        const icons = { text: 'fa-robot', chart: 'fa-chart-column', table: 'fa-table' };
+        const exportButton = response.response_type === 'table' && structuredOk
+            ? '<button type="button" class="btn btn-sm btn-secondary" onclick="exportAITableCSV()"><i class="fas fa-file-csv"></i> CSV</button>' : '';
+        window.aiLastStructured = response.structured;
+
+        result.innerHTML = aiDetailsHTML(response) +
+            `<div class="ai-answer-header">
+                <h3><i class="fas ${icons[response.response_type]}"></i> ${titles[response.response_type]}</h3>
+                <div class="ai-actions">${exportButton}
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="copyAIAnswer()"><i class="fas fa-copy"></i> Copier</button>
+                </div>
+            </div>
+            ${aiResultBodyHTML(response)}
+            <textarea id="ai-answer-raw" hidden></textarea>`;
+        document.getElementById('ai-answer-raw').value = response.analysis;
+        result.style.display = 'block';
+        if (response.response_type === 'chart' && structuredOk) aiRenderChart(response.structured);
+    } catch (error) {
+        showToast('error', 'Analyse IA', `Analyse impossible : ${error.message}`);
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Analyser';
+    }
 }

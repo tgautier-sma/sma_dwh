@@ -8,14 +8,17 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import date
 import subprocess
 import os
 
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import clients, contracts, sites, referentials, addresses, history, claims, diagrams, sales_reps, visits, proposals, analytics
+from app.routers import clients, contracts, sites, referentials, addresses, history, claims, diagrams, sales_reps, visits, proposals, analytics, ai_analysis
+from app.routers import jobs as jobs_router
+from app import jobs
 
 
 @asynccontextmanager
@@ -78,6 +81,8 @@ app.include_router(sales_reps.router)
 app.include_router(visits.router)
 app.include_router(proposals.router)
 app.include_router(analytics.router)
+app.include_router(ai_analysis.router)
+app.include_router(jobs_router.router)
 
 # Montage des fichiers statiques pour le front-end
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
@@ -238,6 +243,15 @@ def get_storage_statistics(db: Session = Depends(get_db)):
 
 
 # Modèles pour la génération de données
+def _start_generation(label: str, cmd: list, success_message: str, timeout: int):
+    """Lance un script en arrière-plan ; la progression est suivie via /jobs/{id}"""
+    try:
+        job = jobs.start_job(label, cmd, success_message, timeout)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"status": "started", "job_id": job.id, "job": job.to_dict()}
+
+
 class DataGenerationRequest(BaseModel):
     count: int = 5
     client_type: str = "mixte"
@@ -266,37 +280,7 @@ async def generate_data(request: DataGenerationRequest, background_tasks: Backgr
     if request.clean:
         cmd.insert(2, "--clean")
     
-    try:
-        # Exécution du script dans un thread pour ne pas bloquer la boucle asyncio
-        result = await run_in_threadpool(
-            subprocess.run,
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minutes max
-        )
-        
-        if result.returncode == 0:
-            return {
-                "status": "success",
-                "message": f"Génération terminée : {request.count} clients créés",
-                "output": result.stdout,
-                "clean": request.clean
-            }
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Erreur lors de la génération",
-                    "error": result.stderr,
-                    "output": result.stdout
-                }
-            )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="La génération a pris trop de temps (timeout)")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
-
+    return _start_generation("Génération de clients", cmd, f"Génération terminée : {request.count} clients créés", 900)
 
 @app.post("/clean-data/", tags=["Data Generation"])
 @app.post("/clean-data", tags=["Data Generation"])
@@ -357,36 +341,7 @@ async def generate_claims(request: ClaimsGenerationRequest):
     if request.clean:
         cmd.insert(2, "--clean")
     
-    try:
-        # Exécution du script dans un thread pool pour ne pas bloquer la boucle asyncio
-        result = await run_in_threadpool(
-            subprocess.run,
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120  # 2 minutes max
-        )
-        
-        if result.returncode == 0:
-            return {
-                "status": "success",
-                "message": f"Génération terminée : {request.count} sinistres créés",
-                "output": result.stdout,
-                "clean": request.clean
-            }
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Erreur lors de la génération des sinistres",
-                    "error": result.stderr,
-                    "output": result.stdout
-                }
-            )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="La génération des sinistres a pris trop de temps (timeout)")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+    return _start_generation("Génération de sinistres", cmd, f"Génération terminée : {request.count} sinistres créés", 600)
 
 
 @app.post("/init-referential-data/", tags=["Data Generation"])
@@ -435,9 +390,11 @@ async def init_referential_data_endpoint():
 class VisitsGenerationRequest(BaseModel):
     clean: bool = False
     create_reps: bool = True
-    reps_count: int = 20
+    reps_count: int = Field(20, ge=0, le=300)
     create_visits: bool = True
     max_days: Optional[int] = 30
+    start_date: Optional[date] = None
+    visits_per_day: Optional[int] = Field(None, ge=1, le=20)
 
 
 @app.post("/generate-visits/", tags=["Data Generation"])
@@ -455,6 +412,9 @@ async def generate_visits(request: VisitsGenerationRequest):
     if not any([request.clean, request.create_reps, request.create_visits]):
         raise HTTPException(status_code=400, detail="Sélectionnez au moins une action à effectuer")
 
+    if request.create_reps and request.reps_count < 1:
+        raise HTTPException(status_code=400, detail="Le nombre de commerciaux à créer doit être supérieur à 0")
+
     cmd = ["python3", script_path]
     if request.clean:
         cmd.append("--clean")
@@ -462,37 +422,14 @@ async def generate_visits(request: VisitsGenerationRequest):
         cmd += ["--create-reps", "--count", str(request.reps_count)]
     if request.create_visits:
         cmd.append("--create-visits")
+        if request.visits_per_day:
+            cmd += ["--visits-per-day", str(request.visits_per_day)]
+        if request.start_date:
+            cmd += ["--start", request.start_date.isoformat()]
         if request.max_days:
             cmd += ["--max-days", str(request.max_days)]
 
-    try:
-        result = await run_in_threadpool(
-            subprocess.run,
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=600  # 10 minutes max : génération de visites sur une période, peut être long
-        )
-
-        if result.returncode == 0:
-            return {
-                "status": "success",
-                "message": "Génération du réseau commercial terminée",
-                "output": result.stdout
-            }
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Erreur lors de la génération du réseau commercial",
-                    "error": result.stderr,
-                    "output": result.stdout
-                }
-            )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="La génération a pris trop de temps (timeout) : réduisez le nombre de jours ou de commerciaux")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+    return _start_generation("Génération du réseau commercial", cmd, "Génération du réseau commercial terminée", 1800)
 
 
 if __name__ == "__main__":

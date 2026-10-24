@@ -19,11 +19,13 @@ Usage:
     python generate_visits_data.py --create-visits --start 2025-01-01
 """
 import argparse
+import json
+import sys
 import random
 import types
 from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.exc import OperationalError, DBAPIError
+from sqlalchemy.exc import OperationalError, DBAPIError, IntegrityError
 from faker import Faker
 
 from app.database import engine
@@ -160,6 +162,11 @@ def business_days(start: date, end: date):
         current += timedelta(days=1)
 
 
+def emit(tag: str, **data):
+    """Ligne machine lue par l'interface pour afficher le plan et la progression"""
+    print(f"##{tag} {json.dumps(data)}", flush=True)
+
+
 def visits_per_day():
     """Nombre de visites d'un commercial sur une journée donnée (2 à 5, moyenne ~3.2)"""
     return random.choices([2, 3, 4, 5], weights=[30, 35, 20, 15])[0]
@@ -206,6 +213,7 @@ def create_sales_reps(db: Session, count: int, start_date: date) -> list:
     existing_numbers = {n[0] for n in db.query(SalesRepModel.employee_number).all()}
     existing_count = len(existing_numbers)
 
+    emit("PLAN", reps=count)
     sales_reps = []
     seq = existing_count + 1
     for _ in range(count):
@@ -501,9 +509,13 @@ def reconnect(db: Session) -> Session:
     return SessionLocal()
 
 
+SEQUENCE_MARGIN = 500  # marge laissée après resynchronisation en cas de génération concurrente
+
+
 def generate_visits_campaign(db: Session, start_date: date, end_date: date,
                               max_reps: int, max_days: int, proposal_rate: float,
-                              conversion_rate: float, commit_every: int = 200):
+                              conversion_rate: float, commit_every: int = 200,
+                              from_start: bool = False, fixed_visits_per_day: int = None):
     all_reps = db.query(SalesRepModel).filter(SalesRepModel.is_active == True).all()  # noqa: E712
     if not all_reps:
         raise Exception("Aucun commercial trouvé. Créez d'abord des commerciaux avec --create-reps.")
@@ -517,7 +529,7 @@ def generate_visits_campaign(db: Session, start_date: date, end_date: date,
 
     days = list(business_days(start_date, end_date))
     if max_days:
-        days = days[-max_days:]
+        days = days[:max_days] if from_start else days[-max_days:]
 
     visit_seq = [next_sequence_from_db(db, ClientVisitModel, "visit_number", "VIS") - 1]
     proposal_seq = [next_sequence_from_db(db, InsuranceProposalModel, "proposal_number", "PROP") - 1]
@@ -526,16 +538,27 @@ def generate_visits_campaign(db: Session, start_date: date, end_date: date,
     total_visits = 0
     total_proposals = 0
     total_contracts = 0
+    skipped_rep_days = 0
 
+    eligible_by_day = [sum(1 for r in all_reps if not (r.hire_date and r.hire_date > d) and portfolios.get(r.id))
+                       for d in days]
+    expected_visits = round(sum(eligible_by_day) * (fixed_visits_per_day or 3.2))
+    emit("PLAN", days=len(days), reps=len(all_reps), expected_visits=expected_visits,
+         start=str(days[0]) if days else None, end=str(days[-1]) if days else None)
     print(f"\n📅 Génération des visites du {start_date} au {end_date} "
           f"({len(days)} jours ouvrés, {len(all_reps)} commercial(aux))\n")
 
+    steps_total = max(1, len(days) * len(all_reps))
     for day_index, day in enumerate(days, start=1):
-        for rep in all_reps:
+        for rep_index, rep in enumerate(all_reps):
+            if rep_index % 10 == 0:
+                emit("PROGRESS", day=day_index, days=len(days), visits=total_visits,
+                     proposals=total_proposals, contracts=total_contracts,
+                     percent=round(((day_index - 1) * len(all_reps) + rep_index) / steps_total * 100, 1))
             if rep.hire_date and rep.hire_date > day:
                 continue  # pas encore embauché à cette date
 
-            num_visits = visits_per_day()
+            num_visits = fixed_visits_per_day if fixed_visits_per_day else visits_per_day()
             rep_clients = portfolios.get(rep.id) or []
             if not rep_clients or num_visits == 0:
                 continue
@@ -559,11 +582,22 @@ def generate_visits_campaign(db: Session, start_date: date, end_date: date,
 
                 if total_visits % commit_every == 0:
                     db.commit()
+            except IntegrityError as e:
+                # Numéro déjà pris (génération concurrente) : on resynchronise les séquences sur la base
+                skipped_rep_days += 1
+                print(f"  ⚠️  Conflit d'unicité ({str(e.orig).splitlines()[0]}), resynchronisation des numéros...")
+                db = reconnect(db)
+                visit_seq[0] = next_sequence_from_db(db, ClientVisitModel, "visit_number", "VIS") + SEQUENCE_MARGIN
+                proposal_seq[0] = next_sequence_from_db(db, InsuranceProposalModel, "proposal_number", "PROP") + SEQUENCE_MARGIN
+                continue
             except (OperationalError, DBAPIError) as e:
                 print(f"  ⚠️  Connexion perdue ({e.__class__.__name__}), reconnexion et poursuite...")
                 db = reconnect(db)
                 continue
 
+        emit("PROGRESS", day=day_index, days=len(days), visits=total_visits,
+             proposals=total_proposals, contracts=total_contracts,
+             percent=round(day_index / len(days) * 100, 1))
         if day_index % 20 == 0 or day_index == len(days):
             try:
                 db.commit()
@@ -576,6 +610,8 @@ def generate_visits_campaign(db: Session, start_date: date, end_date: date,
         db.commit()
     except (OperationalError, DBAPIError):
         db = reconnect(db)
+    if skipped_rep_days:
+        print(f"  ⚠️  {skipped_rep_days} série(s) de visites abandonnée(s) suite à des conflits de numéros")
     return total_visits, total_proposals, total_contracts
 
 
@@ -609,9 +645,10 @@ def main():
     parser.add_argument("--create-reps", action="store_true", help="Créer des commerciaux")
     parser.add_argument("--count", type=int, default=300, help="Nombre de commerciaux à créer (défaut: 300)")
     parser.add_argument("--create-visits", action="store_true", help="Générer les visites/propositions/souscriptions")
-    parser.add_argument("--start", type=str, default="2025-01-01", help="Date de début (YYYY-MM-DD, défaut: 2025-01-01)")
+    parser.add_argument("--start", type=str, default=None, help="Date de début (YYYY-MM-DD, défaut: 2025-01-01). Si renseignée, --max-days compte à partir de cette date")
     parser.add_argument("--end", type=str, default=None, help="Date de fin (YYYY-MM-DD, défaut: aujourd'hui)")
     parser.add_argument("--max-reps", type=int, default=None, help="Limiter le nombre de commerciaux utilisés (échantillonnage)")
+    parser.add_argument("--visits-per-day", type=int, default=None, help="Nombre fixe de visites par commercial et par jour (défaut: aléatoire entre 2 et 5)")
     parser.add_argument("--max-days", type=int, default=None, help="Limiter aux N derniers jours ouvrés de la période (échantillonnage)")
     parser.add_argument("--proposal-rate", type=float, default=0.35, help="Probabilité qu'une visite génère une proposition (défaut: 0.35)")
     parser.add_argument("--conversion-rate", type=float, default=0.85, help="Probabilité qu'une proposition acceptée soit transformée en contrat (défaut: 0.85)")
@@ -623,7 +660,7 @@ def main():
         if args.clean:
             clean_commercial_network(db)
 
-        start_date = datetime.strptime(args.start, "%Y-%m-%d").date()
+        start_date = datetime.strptime(args.start or "2025-01-01", "%Y-%m-%d").date()
         end_date = datetime.strptime(args.end, "%Y-%m-%d").date() if args.end else date.today()
 
         if args.create_reps:
@@ -636,6 +673,7 @@ def main():
                 db, start_date, end_date,
                 max_reps=args.max_reps, max_days=args.max_days,
                 proposal_rate=args.proposal_rate, conversion_rate=args.conversion_rate,
+                from_start=bool(args.start), fixed_visits_per_day=args.visits_per_day,
             )
             print("\n" + "=" * 60)
             print("📊 RÉSUMÉ DE LA GÉNÉRATION")
@@ -654,6 +692,7 @@ def main():
         import traceback
         traceback.print_exc()
         db.rollback()
+        sys.exit(1)
     finally:
         db.close()
 

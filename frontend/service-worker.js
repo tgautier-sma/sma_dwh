@@ -3,10 +3,10 @@
  * Gère le cache des ressources statiques et des données API
  */
 
-const CACHE_VERSION = 'sma-dwh-v2';
-const STATIC_CACHE = 'sma-dwh-static-v2';
-const API_CACHE = 'sma-dwh-api-v2';
-const IMAGE_CACHE = 'sma-dwh-images-v2';
+const CACHE_VERSION = 'sma-dwh-v3';
+const STATIC_CACHE = 'sma-dwh-static-v3';
+const API_CACHE = 'sma-dwh-api-v3';
+const IMAGE_CACHE = 'sma-dwh-images-v3';
 
 // Ressources à mettre en cache immédiatement
 const STATIC_RESOURCES = [
